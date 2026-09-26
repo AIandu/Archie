@@ -269,8 +269,9 @@ export default function App() {
   };
 
   // Dispatch Controlled Execution & STDP Feedback
-  const handleDispatchExecution = () => {
-    if (!latestVaultRecord || latestVaultRecord.outcome !== 'AUTHORIZED') return;
+  const handleDispatchExecution = (recordOverride?: ChekVaultRecord | null) => {
+    const record = recordOverride || latestVaultRecord;
+    if (!record || record.outcome !== 'AUTHORIZED') return;
     setIsExecuting(true);
 
     setTimeout(() => {
@@ -280,7 +281,7 @@ export default function App() {
 
       const result: ExecutionResult = {
         executionId: `EXEC-DISPATCH-${Date.now().toString(36).toUpperCase()}`,
-        vaultRecordHash: latestVaultRecord.recordHash,
+        vaultRecordHash: record.recordHash,
         status: 'SUCCESS',
         dispatchedAt: new Date().toISOString(),
         actuatorTarget: convergedProposal?.targetSubstrateAction.target || 'ADAPTIVE_MESH_SECTOR_3',
@@ -329,6 +330,7 @@ export default function App() {
     await new Promise((r) => setTimeout(r, 1500));
 
     // Step 4: Sargent Patty Convergence
+    setActiveStage('patty');
     setCycleActiveStep(4);
     await handleRunPattyConvergence();
     await new Promise((r) => setTimeout(r, 1800));
@@ -336,9 +338,11 @@ export default function App() {
     // Step 5: CHEK Independent Verification
     setActiveStage('chek');
     setCycleActiveStep(5);
+    let recordForExecution: ChekVaultRecord | null = null;
     if (convergedProposal) {
       const evaluation = await chekEngine.evaluateProposal(convergedProposal);
-      setLatestVaultRecord(evaluation.vaultRecord);
+      recordForExecution = evaluation.vaultRecord;
+      setLatestVaultRecord(recordForExecution);
     }
     await new Promise((r) => setTimeout(r, 1800));
 
@@ -346,7 +350,9 @@ export default function App() {
     setActiveStage('execution');
     setCycleActiveStep(6);
     await new Promise((r) => setTimeout(r, 800));
-    handleDispatchExecution();
+    if (recordForExecution) {
+      handleDispatchExecution(recordForExecution);
+    }
     await new Promise((r) => setTimeout(r, 1600));
 
     // Finish cycle
@@ -401,7 +407,7 @@ export default function App() {
           />
         )}
 
-        {activeStage === 'twinmind' && (
+        {(activeStage === 'twinmind' || activeStage === 'patty') && (
           <TwinMindArenaComponent
             currentScenario={currentScenario}
             onSelectScenario={handleSelectScenario}

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   Cpu,
   Zap,
@@ -40,16 +40,27 @@ export const NeuromorphicSubstrateComponent: React.FC<NeuromorphicSubstrateCompo
 }) => {
   const [selectedNeuronId, setSelectedNeuronId] = useState<number>(18);
   const [portabilityView, setPortabilityView] = useState<'virtual' | 'fpga' | 'asic'>('virtual');
-  const [voltageHistory, setVoltageHistory] = useState<number[]>([]);
-
+  
   const selectedNeuron = substrate.neurons[selectedNeuronId] || substrate.neurons[0];
 
-  // Track voltage history for oscilloscope
-  useEffect(() => {
+  // Track voltage history for oscilloscope without triggering state updates / cascading re-renders
+  const voltageHistoryRef = useRef<number[]>([]);
+  const lastRecordedTickRef = useRef<number>(-1);
+  const lastNeuronIdRef = useRef<number>(selectedNeuronId);
+
+  if (lastNeuronIdRef.current !== selectedNeuronId) {
+    lastNeuronIdRef.current = selectedNeuronId;
+    voltageHistoryRef.current = selectedNeuron ? [selectedNeuron.membranePotential] : [];
+    lastRecordedTickRef.current = telemetry.tick;
+  } else if (lastRecordedTickRef.current !== telemetry.tick) {
+    lastRecordedTickRef.current = telemetry.tick;
     if (selectedNeuron) {
-      setVoltageHistory((prev) => [...prev.slice(-30), selectedNeuron.membranePotential]);
+      voltageHistoryRef.current.push(selectedNeuron.membranePotential);
+      if (voltageHistoryRef.current.length > 30) {
+        voltageHistoryRef.current.shift();
+      }
     }
-  }, [telemetry.tick, selectedNeuron?.membranePotential]);
+  }
 
   const handleNeuronClick = (id: number) => {
     setSelectedNeuronId(id);
@@ -403,7 +414,7 @@ Kill Wire: Dedicated Low-Impedance 1.8V Pull-Down Line (Zero Clock Gating)`}
                   <span className="text-[8px] font-mono text-slate-600 absolute right-1 -top-3">V_reset (-75mV)</span>
                 </div>
 
-                {voltageHistory.map((v, idx) => {
+                {voltageHistoryRef.current.map((v, idx) => {
                   const heightPct = Math.max(5, Math.min(100, ((v - -75) / 25) * 100));
                   const isSpike = v >= -56;
                   return (
