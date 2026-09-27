@@ -210,7 +210,7 @@ export const TwinMindArenaComponent: React.FC<Props> = ({
     {convergedProposal && <section className="rounded-2xl border border-stone-800 bg-[#0b0a08] p-5 sm:p-7">
       <div className="flex gap-3 items-start">{convergedProposal.status==='CONVERGED_DEFENSIBLE'?<CheckCircle2 className="text-emerald-400"/>:<AlertCircle className="text-amber-300"/>}
         <div><p className="text-xs font-mono text-stone-500">{convergedProposal.status}</p><h3 className="text-lg font-bold text-stone-100 mt-1">{convergedProposal.title}</h3><p className="text-sm text-stone-300 mt-2">{convergedProposal.coreDecision}</p></div></div>
-      {convergedProposal.status==='CONVERGED_DEFENSIBLE' && <button onClick={()=>onTransmitToChek(convergedProposal)} className="mt-4 rounded-lg border border-amber-200/30 px-5 py-2.5 text-xs font-bold text-amber-100">Send consequential proposal to CHEK</button>}
+      {convergedProposal.status==='CONVERGED_DEFENSIBLE' && <button onClick={()=>onTransmitToChek(convergedProposal)} className="mt-4 rounded-lg border border-amber-200/30 px-5 py-2.5 text-xs font-bold text-amber-100">Send consequential proposal to Governor</button>}
     </section>}
 
     <details className="rounded-xl border border-stone-900 bg-black/20 p-4 text-xs text-stone-600">
