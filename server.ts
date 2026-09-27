@@ -17,7 +17,7 @@ app.use(express.json({ limit: '10mb' }));
 const apiKey = process.env.GEMINI_API_KEY;
 const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY?.trim();
-const PATTY_MODEL = process.env.PATTY_MODEL || 'gpt-5.2';
+const PATTY_MODEL = process.env.PATTY_MODEL || 'gpt-5.6';
 let ai: GoogleGenAI | null = null;
 
 type PublicMindId = 'chatgpt' | 'claude' | 'gemini' | 'grok' | 'perplexity';
