@@ -64,8 +64,28 @@ export interface SubstrateTelemetry {
   rasterHistory: { tick: number; spikingNeuronIds: number[] }[];
 }
 
+export type PublicMindId = 'chatgpt' | 'claude' | 'gemini' | 'grok' | 'perplexity';
+
+export interface PublicMindEvidence {
+  id: PublicMindId;
+  name: string;
+  provider: string;
+  response: string;
+  capturedAt: string;
+  sourceMode: 'PUBLIC_FRESH_SESSION' | 'MANUAL_CAPTURE' | 'SUPPORTED_CONNECTOR';
+}
+
+export interface TwinMindCase {
+  id: string;
+  problem: string;
+  createdAt: string;
+  updatedAt: string;
+  submissions: PublicMindEvidence[];
+  history: { at: string; event: string; detail: string }[];
+}
+
 export interface OuterMind {
-  id: 'charlie' | 'claude' | 'gemini' | 'athena' | 'daedalus';
+  id: 'charlie' | 'claude' | 'gemini' | 'athena' | 'daedalus' | PublicMindId;
   name: string;
   avatar: string;
   role: string;
