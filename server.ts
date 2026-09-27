@@ -1,5 +1,6 @@
 import express, { Request, Response } from 'express';
 import path from 'path';
+import { createHash, randomUUID } from 'crypto';
 import { mkdir, readFile, writeFile, rename } from 'fs/promises';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
@@ -23,12 +24,27 @@ const PATTY_MODEL = process.env.PATTY_MODEL || 'gpt-5.6';
 let ai: GoogleGenAI | null = null;
 
 interface PublicMindSubmission {
+  evidenceId: string;
+  evidenceHash: string;
   id: PublicMindId;
   name: string;
   provider: string;
   response: string;
   capturedAt: string;
   sourceMode: 'PUBLIC_FRESH_SESSION' | 'MANUAL_CAPTURE' | 'SUPPORTED_CONNECTOR';
+  revision: number;
+  parentEvidenceHash?: string;
+  challengeId?: string;
+  admission: ReturnType<typeof deterministicAdmissionCheck>;
+}
+
+interface PattyChallenge {
+  id: string;
+  target: PublicMindId;
+  instruction: string;
+  createdAt: string;
+  sourceEvidenceHashes: string[];
+  status: 'AWAITING_RESPONSE' | 'ANSWERED';
 }
 
 interface TwinMindCase {
@@ -37,10 +53,22 @@ interface TwinMindCase {
   createdAt: string;
   updatedAt: string;
   submissions: PublicMindSubmission[];
+  challenges: PattyChallenge[];
   history: Array<{ at: string; event: string; detail: string }>;
 }
 
 const twinMindCases = new Map<string, TwinMindCase>();
+let persistQueue: Promise<void> = Promise.resolve();
+
+function canonicalize(value: any): string {
+  if (Array.isArray(value)) return '[' + value.map(canonicalize).join(',') + ']';
+  if (value && typeof value === 'object') return '{' + Object.keys(value).sort().map((k) => JSON.stringify(k) + ':' + canonicalize(value[k])).join(',') + '}';
+  return JSON.stringify(value);
+}
+
+function sha256(value: any): string {
+  return createHash('sha256').update(canonicalize(value)).digest('hex');
+}
 const CASE_STORE_PATH = process.env.CASE_STORE_PATH || path.join(__dirname, 'data', 'twin-mind-cases.json');
 
 async function loadTwinMindCases() {
@@ -54,20 +82,24 @@ async function loadTwinMindCases() {
 }
 
 async function persistTwinMindCases() {
-  await mkdir(path.dirname(CASE_STORE_PATH), { recursive: true });
-  const tmp = `${CASE_STORE_PATH}.tmp`;
-  await writeFile(tmp, JSON.stringify([...twinMindCases.values()], null, 2), 'utf8');
-  await rename(tmp, CASE_STORE_PATH);
+  persistQueue = persistQueue.then(async () => {
+    await mkdir(path.dirname(CASE_STORE_PATH), { recursive: true });
+    const tmp = `${CASE_STORE_PATH}.${process.pid}.tmp`;
+    await writeFile(tmp, JSON.stringify([...twinMindCases.values()], null, 2), 'utf8');
+    await rename(tmp, CASE_STORE_PATH);
+  });
+  return persistQueue;
 }
 
 function createCase(problem: string): TwinMindCase {
   const now = new Date().toISOString();
   const item: TwinMindCase = {
-    id: `CASE-${Date.now().toString(36).toUpperCase()}`,
+    id: `CASE-${randomUUID().toUpperCase()}`,
     problem,
     createdAt: now,
     updatedAt: now,
     submissions: [],
+    challenges: [],
     history: [{ at: now, event: 'CASE_CREATED', detail: 'Patty opened a persistent deliberation case.' }],
   };
   twinMindCases.set(item.id, item);
@@ -184,170 +216,40 @@ app.post('/api/twin-mind/cases/:caseId/submissions', async (req: Request, res: R
     return res.json({ case: item, admission });
   }
 
+  const prior = [...item.submissions].reverse().find((x) => x.id === id);
+  const challengeId = typeof req.body?.challengeId === 'string' ? req.body.challengeId : undefined;
+  const challenge = challengeId ? item.challenges?.find((x) => x.id === challengeId && x.target === id) : undefined;
+  if (challengeId && !challenge) return res.status(400).json({ error: 'Challenge does not exist or targets a different mind.' });
+
+  const revision = (prior?.revision || 0) + 1;
+  const evidenceCore = { caseId: item.id, id, response, capturedAt, sourceMode: req.body?.sourceMode || 'PUBLIC_FRESH_SESSION', revision, parentEvidenceHash: prior?.evidenceHash, challengeId };
   const submission: PublicMindSubmission = {
+    evidenceId: `EVID-${randomUUID().toUpperCase()}`,
+    evidenceHash: sha256(evidenceCore),
     id,
     name: names[id],
     provider: names[id],
     response,
     capturedAt,
-    sourceMode: req.body?.sourceMode || 'PUBLIC_FRESH_SESSION',
+    sourceMode: evidenceCore.sourceMode,
+    revision,
+    parentEvidenceHash: prior?.evidenceHash,
+    challengeId,
+    admission,
   };
-  item.submissions = [...item.submissions.filter((x) => x.id !== id), submission];
+  item.submissions.push(submission);
+  if (challenge) challenge.status = 'ANSWERED';
   item.updatedAt = capturedAt;
   item.history.push({ at: capturedAt, event: 'PUBLIC_MIND_ADMITTED', detail: `${submission.name} response admitted as fresh external evidence.` });
   await persistTwinMindCases();
   return res.json({ case: item, admission });
 });
 
-app.post('/api/twin-mind/deliberate', async (req: Request, res: Response) => {
-  const { problem, minds } = req.body;
-  if (!problem) {
-    return res.status(400).json({ error: 'Problem description is required.' });
-  }
-
-  if (ai) {
-    try {
-      const prompt = `You are running the Twin Mind deliberative engine for an integrated autonomous intelligence architecture.
-The problem presented to the minds is:
-"${problem}"
-
-Generate concise, rigorous cognitive responses for the following minds, each preserving their distinct style and cognitive strength:
-1. Charlie (Formal deductive logic, mathematical rigor, algorithmic constraints)
-2. Claude (Synthetic, dialectical deconstruction, edge-case vulnerability)
-3. Gemini (First-principles reasoning, empirical exploration, physical grounding)
-4. Athena (Adversarial red-team, failure-mode exploitation, stress-testing)
-5. Daedalus (Architectural systems engineering, resource constraints, real-world execution)
-
-Do not self-certify or generate checker results. The server runs deterministic admission checks after your response.
-
-Return the response in valid JSON matching this schema:
-{
-  "minds": [
-    {
-      "id": "charlie",
-      "name": "Mind Charlie",
-      "specialty": "Formal Logic & Deductive Proof",
-      "hypothesis": "string",
-      "reasoning": ["step 1", "step 2", "step 3"],
-      "confidence": number (0-1)
-    },
-    ...
-  ]
-}`;
-
-      const response = await ai.models.generateContent({
-        model: GEMINI_MODEL,
-        contents: prompt,
-        config: {
-          responseMimeType: 'application/json',
-          temperature: 0.7,
-        },
-      });
-
-      const parsed = JSON.parse(response.text || '{}');
-      const rawMinds = Array.isArray(parsed.minds) ? parsed.minds : [];
-      return res.json({ minds: rawMinds.slice(0, 5).map(normalizeMind) });
-    } catch (err: any) {
-      console.warn('Gemini deliberation error, using fallback:', err?.message);
-    }
-  }
-
-  // Deterministic high-fidelity fallback
-  const fallbackMinds = [
-      {
-        id: 'charlie',
-        name: 'Mind Charlie',
-        specialty: 'Formal Logic & Deductive Proof',
-        hypothesis: `Partition resource invariants into bounded state vectors [Σ_i S_i ≤ C_max]. Enforce monotonic convergence via Lyapunov stability criterion.`,
-        reasoning: [
-          'Formulate strict bounding equations on state transitions',
-          'Eliminate non-deterministic branches by constraining search space to convex polytopes',
-          'Verify invariant preservation under arbitrary actuator lag',
-        ],
-        outerCheck: {
-          passed: true,
-          kickedBackClaims: [],
-          diagnostic: 'CHECK-A: Formal syntax validated. No inductive leaps detected. Dimensional consistency verified.',
-        },
-        confidence: 0.94,
-      },
-      {
-        id: 'claude',
-        name: 'Mind Claude',
-        specialty: 'Synthetic & Dialectical Deconstruction',
-        hypothesis: `Charlie\'s formulation overlooks asynchronous race conditions in distributed sensory buses. Introduce dialectical boundary cushions and adaptive hysteresis buffers.`,
-        reasoning: [
-          'Deconstruct Charlie\'s assumption of instantaneous crossbar synchronization',
-          'Identify edge failure during sudden telemetry spike',
-          'Synthesize Charlie\'s invariant with dynamic rate-limiting',
-        ],
-        outerCheck: {
-          passed: true,
-          kickedBackClaims: [],
-          diagnostic: 'CHECK-B: Dialectical edge-case valid. Identified latent cross-talk vulnerability.',
-        },
-        confidence: 0.91,
-      },
-      {
-        id: 'gemini',
-        name: 'Mind Gemini',
-        specialty: 'First-Principles & Empirical Exploration',
-        hypothesis: `Ground the computation directly in physical neuromorphic kinetics: use phase-locked spiking rhythms across the adaptive crossbar to synchronize sensory buses naturally.`,
-        reasoning: [
-          'Map sensory bus timing to physical axon propagation delays (~1.2ms)',
-          'Utilize resonant firing frequencies to self-stabilize state drift',
-          'Prevent thermal runaway by throttling firing frequency to 240Hz cap',
-        ],
-        outerCheck: {
-          passed: true,
-          kickedBackClaims: [],
-          diagnostic: 'CHECK-C: Physical kinetics plausible. Energy expenditure model checked against neuromorphic substrate thermal budget.',
-        },
-        confidence: 0.89,
-      },
-      {
-        id: 'athena',
-        name: 'Mind Athena',
-        specialty: 'Adversarial Red-Team & Fault Exploitation',
-        hypothesis: `Disputed assumption: What if external sensor telemetry is spoofed or saturated by an adversarial actor? A rigid convex polytope can be forced into deadlock.`,
-        reasoning: [
-          'Simulate sensor spoofing attack injecting 300% entropy delta',
-          'Demonstrate deadlock condition if refusal gate triggers prematurely',
-          'Require independent out-of-band sanity check before transition validation',
-        ],
-        outerCheck: {
-          passed: true,
-          kickedBackClaims: [],
-          diagnostic: 'CHECK-D: Red-team attack vector verified against mock Byzantine sensor fault.',
-        },
-        confidence: 0.96,
-      },
-      {
-        id: 'daedalus',
-        name: 'Mind Daedalus',
-        specialty: 'Systems Engineering & Feasibility',
-        hypothesis: `Integrate Athena's out-of-band audit with Claude's hysteresis buffer into a hardware-timed execution sequence consuming <18mJ per transition cycle.`,
-        reasoning: [
-          'Route execution packets strictly through isolated output crossbar bus',
-          'Verify silicon latency meets 4.2ms hard real-time deadline',
-          'Format proposal as signed evidence manifest for CHEK independent audit',
-        ],
-        outerCheck: {
-          passed: true,
-          kickedBackClaims: [],
-          diagnostic: 'CHECK-E: Hardware timing and memory bus consumption checked. Pass.',
-        },
-        confidence: 0.92,
-      },
-    ];
-  return res.json({ minds: fallbackMinds.map(normalizeMind) });
-});
-
 app.post('/api/twin-mind/patty-converge', async (req: Request, res: Response) => {
   const { problem, mindsData, caseId } = req.body;
   const persistentCase = caseId ? twinMindCases.get(caseId) : undefined;
   const publicEvidence = persistentCase?.submissions?.length
-    ? persistentCase.submissions.map((x) => ({ id: x.id, name: x.name, response: x.response, capturedAt: x.capturedAt }))
+    ? persistentCase.submissions.map((x) => ({ evidenceId: x.evidenceId, evidenceHash: x.evidenceHash, id: x.id, name: x.name, response: x.response, capturedAt: x.capturedAt, revision: x.revision, parentEvidenceHash: x.parentEvidenceHash, challengeId: x.challengeId }))
     : mindsData;
 
   const pattyPrompt = `You are Sargent Patty, the persistent convergence controller in Twin Mind.
@@ -385,6 +287,22 @@ IMPORTANT: Never write a public mind's reply yourself. Every dialogue.response M
       const text = await runPattyOpenAI(pattyPrompt);
       if (text) {
         const parsed = sanitizePatty(JSON.parse(text));
+        if (persistentCase && Array.isArray(parsed.dialogue)) {
+          persistentCase.challenges ||= [];
+          for (const d of parsed.dialogue) {
+            const target = String(d?.target || '').toLowerCase() as PublicMindId;
+            if (PUBLIC_MIND_IDS.includes(target) && typeof d?.instruction === 'string' && d.instruction.trim()) {
+              persistentCase.challenges.push({
+                id: `CHAL-${randomUUID().toUpperCase()}`,
+                target,
+                instruction: d.instruction.trim(),
+                createdAt: new Date().toISOString(),
+                sourceEvidenceHashes: persistentCase.submissions.map((x) => x.evidenceHash),
+                status: 'AWAITING_RESPONSE',
+              });
+            }
+          }
+        }
         if (persistentCase) {
           const now = new Date().toISOString();
           persistentCase.updatedAt = now;
@@ -412,6 +330,12 @@ IMPORTANT: Never write a public mind's reply yourself. Every dialogue.response M
       });
 
       const parsed = sanitizePatty(JSON.parse(response.text || '{}'));
+      if (persistentCase) {
+        const now = new Date().toISOString();
+        persistentCase.updatedAt = now;
+        persistentCase.history.push({ at: now, event: 'PATTY_CONVERGENCE', detail: parsed.status || 'UNKNOWN' });
+        await persistTwinMindCases();
+      }
       return res.json({ ...parsed, caseId: persistentCase?.id, pattyProvider: `Gemini:${GEMINI_MODEL}` });
     } catch (err: any) {
       console.warn('Patty convergence error, fallback:', err?.message);
