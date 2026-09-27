@@ -12,6 +12,7 @@ interface Props {
   convergedProposal: ConvergedProposal | null;
   isDeliberating: boolean;
   onRunDeliberation: (problemText?: string) => void;
+  onStartPattyCase: (message: string) => Promise<string>;
   onRunPattyConvergence: (caseId?: string) => void;
   twinMindCase: TwinMindCase | null;
   onCapturePublicMind: (id: PublicMindId, response: string) => Promise<any>;
@@ -32,7 +33,7 @@ const PUBLIC_MINDS: { id: PublicMindId; label: string; url: string }[] = [
 ];
 
 export const TwinMindArenaComponent: React.FC<Props> = ({
-  currentScenario, isDeliberating, onRunDeliberation, onRunPattyConvergence,
+  currentScenario, isDeliberating, onRunDeliberation, onStartPattyCase, onRunPattyConvergence,
   twinMindCase, onCapturePublicMind, convergedProposal, onTransmitToChek,
   onTalkToPatty, pattyConversation, caseHistory, onLoadCase,
 }) => {
@@ -49,12 +50,17 @@ export const TwinMindArenaComponent: React.FC<Props> = ({
   const activeQuestion = twinMindCase?.problem || '';
   const packet = twinMindCase ? buildPublicMindCasePrompt(twinMindCase.problem, twinMindCase.id) : '';
 
-  const startCase = () => {
+  const startCase = async () => {
     const q = question.trim();
     if (!q) return;
-    setStatus('Opening case...');
-    onRunDeliberation(q);
-    setStatus('');
+    setStatus('Patty is thinking...');
+    try {
+      await onStartPattyCase(q);
+      setQuestion('');
+      setStatus('');
+    } catch (e: any) {
+      setStatus(e?.message || 'Patty could not open the conversation.');
+    }
   };
 
   const copyPacket = async () => {
@@ -133,15 +139,16 @@ export const TwinMindArenaComponent: React.FC<Props> = ({
     </section>
 
     <section className="rounded-2xl border border-amber-200/15 bg-[#0b0a08] p-5 sm:p-7">
-      <p className="text-[11px] font-mono tracking-[.18em] text-amber-200/70">ASK ARCHIE</p>
-      <h2 className="text-2xl font-bold text-stone-100 mt-2">What do you want the minds to solve?</h2>
+      <p className="text-[11px] font-mono tracking-[.18em] text-amber-200/70">SARGENT PATTY • ARCHIE COGNITIVE FRONT DOOR</p>
+      <h2 className="text-2xl font-bold text-stone-100 mt-2">What are we working on?</h2>
+      <p className="text-sm text-stone-500 mt-2">Talk to Patty normally. She can reason, predict, generate and decide with you. Twin Mind stays behind the wall until independent minds would materially improve the answer.</p>
       {!twinMindCase ? <>
         <textarea value={question} onChange={e=>setQuestion(e.target.value)} rows={5}
-          placeholder="Type your question, problem, idea, or decision here..."
+          placeholder="Ask Patty a question, throw her an idea, or give her a problem..."
           className="mt-5 w-full rounded-xl border border-stone-800 bg-black/50 p-4 text-sm text-stone-100 focus:outline-none focus:border-amber-200/40" />
         <button onClick={startCase} disabled={!question.trim() || isDeliberating}
           className="mt-3 w-full sm:w-auto rounded-lg bg-gradient-to-r from-[#9b7a3f] to-[#c8a96b] px-6 py-3 font-bold text-black disabled:opacity-40">
-          Ask the Five Minds
+          Talk to Patty
         </button>
       </> : <>
         <div className="mt-4 rounded-xl border border-stone-800 bg-black/40 p-4 text-sm text-stone-200">{activeQuestion}</div>
@@ -191,7 +198,11 @@ export const TwinMindArenaComponent: React.FC<Props> = ({
 
     {twinMindCase && <section className="rounded-2xl border border-amber-200/20 bg-[#0b0a08] p-5 sm:p-7 space-y-4">
       <div><p className="text-[11px] font-mono tracking-[.18em] text-amber-200/70">SARGENT PATTY</p>
-        <h3 className="text-xl font-bold text-stone-100 mt-1">Convergence & conversation</h3></div>
+        <h3 className="text-xl font-bold text-stone-100 mt-1">Your persistent cognitive partner</h3>
+        {twinMindCase?.pattyState && <div className="mt-2 flex flex-wrap items-center gap-2">
+          <span className="rounded-full border border-amber-200/20 px-2 py-1 text-[10px] font-mono text-amber-100">{twinMindCase.pattyState.lastReasoningMode}</span>
+          {twinMindCase.pattyState.twinMindRecommended && <span className="rounded-full border border-cyan-400/20 px-2 py-1 text-[10px] font-mono text-cyan-300">TWIN MIND RECOMMENDED</span>}
+        </div>}</div>
       <div className="rounded-xl border border-stone-800 bg-black/40 p-4 max-h-80 overflow-y-auto space-y-3">
         {pattyConversation.length===0?<p className="text-xs text-stone-500">Patty has the case. Ask what she knows, where the minds disagree, or what evidence is missing.</p>:
         pattyConversation.map((m,i)=><p key={i} className="text-sm text-stone-300"><b className={m.role==='PATTY'?'text-amber-100':'text-stone-100'}>{m.role==='PATTY'?'PATTY':'YOU'}:</b> {m.text}</p>)}
@@ -203,8 +214,11 @@ export const TwinMindArenaComponent: React.FC<Props> = ({
           className="rounded-lg bg-gradient-to-r from-[#9b7a3f] to-[#c8a96b] px-5 py-2.5 text-xs font-bold text-black disabled:opacity-40">Ask Patty</button>
         <button disabled={uniqueMinds<2 || isDeliberating} onClick={()=>onRunPattyConvergence(twinMindCase.id)}
           className="rounded-lg border border-amber-200/25 px-5 py-2.5 text-xs font-bold text-amber-100 disabled:opacity-30">Resolve the Minds</button>
+        {twinMindCase.pattyState?.twinMindRecommended && uniqueMinds<2 && <button onClick={openAllMinds}
+          className="rounded-lg border border-cyan-400/30 bg-cyan-950/20 px-5 py-2.5 text-xs font-bold text-cyan-200">Bring in Twin Mind</button>}
       </div>
-      {uniqueMinds<2 && <p className="text-[11px] text-stone-600">Patty needs admitted evidence from at least two independent minds before convergence.</p>}
+      {twinMindCase.pattyState?.twinMindRecommended && <p className="text-[11px] text-cyan-300/70">Patty's reason: {twinMindCase.pattyState.reason}</p>}
+      {uniqueMinds<2 && <p className="text-[11px] text-stone-600">Twin Mind is optional until Patty recommends it or you choose to invoke it. Convergence requires admitted evidence from at least two independent minds.</p>}
     </section>}
 
     {convergedProposal && <section className="rounded-2xl border border-stone-800 bg-[#0b0a08] p-5 sm:p-7">
