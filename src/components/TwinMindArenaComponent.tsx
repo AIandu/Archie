@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { OuterMind, PattyExchange, ConvergedProposal, ScenarioPreset, TwinMindCase, PublicMindId } from '../types/architecture';
 import { SCENARIO_PRESETS } from '../engine/scenarioPresets';
+import { buildPublicMindCasePrompt } from '../engine/twinMindGovernance';
 
 interface TwinMindArenaComponentProps {
   currentScenario: ScenarioPreset;
@@ -49,6 +50,7 @@ export const TwinMindArenaComponent: React.FC<TwinMindArenaComponentProps> = ({
   const [captureMind, setCaptureMind] = useState<PublicMindId>('chatgpt');
   const [captureText, setCaptureText] = useState('');
   const [captureStatus, setCaptureStatus] = useState('');
+  const [copyStatus, setCopyStatus] = useState('');
 
   const selectedMind = minds.find((m) => m.id === selectedMindId) || minds[0];
 
@@ -161,6 +163,22 @@ export const TwinMindArenaComponent: React.FC<TwinMindArenaComponentProps> = ({
             {twinMindCase ? `${twinMindCase.id} • ${twinMindCase.submissions.length}/5 captured` : 'Open a case first'}
           </span>
         </div>
+        {twinMindCase && (
+          <div className="flex items-center justify-between gap-3 rounded-lg border border-slate-800 bg-slate-950/70 p-3">
+            <span className="text-[10px] font-mono text-slate-400">Use the identical case packet for every fresh public AI session.</span>
+            <button
+              onClick={async () => {
+                const packet = buildPublicMindCasePrompt(twinMindCase.problem, twinMindCase.id);
+                await navigator.clipboard.writeText(packet);
+                setCopyStatus('Case packet copied.');
+              }}
+              className="px-3 py-1.5 rounded border border-cyan-800 bg-cyan-950/40 text-cyan-200 text-[10px] font-mono font-bold"
+            >
+              Copy Case Packet
+            </button>
+          </div>
+        )}
+        {copyStatus && <div className="text-[10px] font-mono text-cyan-400">{copyStatus}</div>}
         <div className="grid grid-cols-1 md:grid-cols-5 gap-2">
           {(['chatgpt','claude','gemini','grok','perplexity'] as PublicMindId[]).map((id) => {
             const hit = twinMindCase?.submissions.find((x) => x.id === id);
@@ -394,7 +412,7 @@ export const TwinMindArenaComponent: React.FC<TwinMindArenaComponentProps> = ({
                   <CornerDownRight className="w-3.5 h-3.5 text-cyan-400 mt-0.5 shrink-0" />
                   <div>
                     <span className="text-cyan-400 font-bold">{item.target}: </span>
-                    <span className="text-slate-200">{item.response}</span>
+                    <span className="text-slate-200">{item.response || 'Awaiting a real external response. Copy Patty’s challenge to that public mind, then capture the reply above.'}</span>
                   </div>
                 </div>
               </div>
