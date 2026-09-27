@@ -1,5 +1,6 @@
 import express, { Request, Response } from 'express';
 import path from 'path';
+import { mkdir, readFile, writeFile, rename } from 'fs/promises';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
 import { GoogleGenAI } from '@google/genai';
@@ -40,6 +41,24 @@ interface TwinMindCase {
 }
 
 const twinMindCases = new Map<string, TwinMindCase>();
+const CASE_STORE_PATH = process.env.CASE_STORE_PATH || path.join(__dirname, 'data', 'twin-mind-cases.json');
+
+async function loadTwinMindCases() {
+  try {
+    const raw = await readFile(CASE_STORE_PATH, 'utf8');
+    const rows = JSON.parse(raw);
+    if (Array.isArray(rows)) for (const item of rows) if (item?.id) twinMindCases.set(item.id, item);
+  } catch (err: any) {
+    if (err?.code !== 'ENOENT') console.warn('Twin Mind case store load failed:', err?.message);
+  }
+}
+
+async function persistTwinMindCases() {
+  await mkdir(path.dirname(CASE_STORE_PATH), { recursive: true });
+  const tmp = `${CASE_STORE_PATH}.tmp`;
+  await writeFile(tmp, JSON.stringify([...twinMindCases.values()], null, 2), 'utf8');
+  await rename(tmp, CASE_STORE_PATH);
+}
 
 function createCase(problem: string): TwinMindCase {
   const now = new Date().toISOString();
@@ -117,14 +136,17 @@ app.get('/api/status', (req: Request, res: Response) => {
       twinMind: 'Independent Public Minds + Deterministic Admission Checkers + Persistent Sargent Patty',
       chek: 'Independent Authority Verification (Intake -> Auditor -> Verifier -> Vault)',
       execution: 'Controlled Output Bus & Feedback Loop',
+      caseStore: `Host file: ${CASE_STORE_PATH} (mount persistent storage for durable deployment)`,
     },
   });
 });
 
-app.post('/api/twin-mind/cases', (req: Request, res: Response) => {
+app.post('/api/twin-mind/cases', async (req: Request, res: Response) => {
   const problem = typeof req.body?.problem === 'string' ? req.body.problem.trim() : '';
   if (!problem) return res.status(400).json({ error: 'Problem description is required.' });
-  return res.json({ case: createCase(problem) });
+  const item = createCase(problem);
+  await persistTwinMindCases();
+  return res.json({ case: item });
 });
 
 app.get('/api/twin-mind/cases/:caseId', (req: Request, res: Response) => {
@@ -133,7 +155,7 @@ app.get('/api/twin-mind/cases/:caseId', (req: Request, res: Response) => {
   return res.json({ case: item });
 });
 
-app.post('/api/twin-mind/cases/:caseId/submissions', (req: Request, res: Response) => {
+app.post('/api/twin-mind/cases/:caseId/submissions', async (req: Request, res: Response) => {
   const item = twinMindCases.get(req.params.caseId);
   if (!item) return res.status(404).json({ error: 'Case not found.' });
   const id = String(req.body?.id || '').toLowerCase() as PublicMindId;
@@ -158,6 +180,7 @@ app.post('/api/twin-mind/cases/:caseId/submissions', (req: Request, res: Respons
       event: 'PUBLIC_MIND_KICKED_BACK',
       detail: `${names[id]} response failed admission: ${admission.diagnostic}`,
     });
+    await persistTwinMindCases();
     return res.json({ case: item, admission });
   }
 
@@ -172,6 +195,7 @@ app.post('/api/twin-mind/cases/:caseId/submissions', (req: Request, res: Respons
   item.submissions = [...item.submissions.filter((x) => x.id !== id), submission];
   item.updatedAt = capturedAt;
   item.history.push({ at: capturedAt, event: 'PUBLIC_MIND_ADMITTED', detail: `${submission.name} response admitted as fresh external evidence.` });
+  await persistTwinMindCases();
   return res.json({ case: item, admission });
 });
 
@@ -365,6 +389,7 @@ IMPORTANT: Never write a public mind's reply yourself. Every dialogue.response M
           const now = new Date().toISOString();
           persistentCase.updatedAt = now;
           persistentCase.history.push({ at: now, event: 'PATTY_CONVERGENCE', detail: parsed.status || 'UNKNOWN' });
+          await persistTwinMindCases();
         }
         return res.json({ ...parsed, caseId: persistentCase?.id, pattyProvider: `OpenAI:${PATTY_MODEL}` });
       }
@@ -418,6 +443,7 @@ IMPORTANT: Never write a public mind's reply yourself. Every dialogue.response M
 });
 
 async function startServer() {
+  await loadTwinMindCases();
   if (process.env.NODE_ENV !== 'production') {
     const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
