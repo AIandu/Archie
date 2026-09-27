@@ -277,10 +277,10 @@ export default function App() {
     } finally { setIsDeliberating(false); }
   };
 
-  // Transmit to CHEK Independent Authority
+  // Transmit consequential proposal to Governor authority
   const handleTransmitToChek = (prop: ConvergedProposal) => {
     setConvergedProposal(prop);
-    setActiveStage('chek');
+    setActiveStage('governor');
   };
 
   // Dispatch Controlled Execution & STDP Feedback
@@ -350,8 +350,8 @@ export default function App() {
     await handleRunPattyConvergence();
     await new Promise((r) => setTimeout(r, 1800));
 
-    // Step 5: CHEK Independent Verification
-    setActiveStage('chek');
+    // Step 5: Governor authorization
+    setActiveStage('governor');
     setCycleActiveStep(5);
     let recordForExecution: ChekVaultRecord | null = null;
     if (convergedProposal && convergedProposal.status === 'CONVERGED_DEFENSIBLE') {
@@ -361,9 +361,14 @@ export default function App() {
     }
     await new Promise((r) => setTimeout(r, 1800));
 
-    // Step 6: Controlled Execution & Feedback
-    setActiveStage('execution');
+    // Step 6: CHEK independently verifies the governed chain
+    setActiveStage('chek');
     setCycleActiveStep(6);
+    await new Promise((r) => setTimeout(r, 1200));
+
+    // Step 7: Controlled Execution & Feedback
+    setActiveStage('execution');
+    setCycleActiveStep(7);
     await new Promise((r) => setTimeout(r, 800));
     if (recordForExecution) {
       handleDispatchExecution(recordForExecution);
@@ -443,8 +448,21 @@ export default function App() {
           />
         )}
 
+        {activeStage === 'governor' && (
+          <ChekTerminalComponent
+            mode="governor"
+            chekEngine={chekEngine}
+            currentProposal={convergedProposal}
+            onAdvanceToExecution={(record) => {
+              setLatestVaultRecord(record);
+              setActiveStage('chek');
+            }}
+          />
+        )}
+
         {activeStage === 'chek' && (
           <ChekTerminalComponent
+            mode="chek"
             chekEngine={chekEngine}
             currentProposal={convergedProposal}
             onAdvanceToExecution={(record) => {
@@ -475,7 +493,7 @@ export default function App() {
           <div className="flex items-center gap-2">
             <span className="w-2 h-2 rounded-full bg-amber-200" />
             <span>
-              <strong>The Superpower:</strong> Womb defines → Chip constrains → Twin Mind reasons → Patty converges → CHEK authorizes → Chip executes → System learns.
+              <strong>The Superpower:</strong> Womb defines → Chip constrains → Twin Mind reasons → Patty converges → Governor authorizes → CHEK verifies → Chip executes → System learns.
             </span>
           </div>
           <div className="text-slate-400">
