@@ -145,24 +145,34 @@ app.post('/api/twin-mind/cases/:caseId/submissions', (req: Request, res: Respons
   const names: Record<PublicMindId, string> = {
     chatgpt: 'ChatGPT', claude: 'Claude', gemini: 'Gemini', grok: 'Grok', perplexity: 'Perplexity',
   };
+  const admission = deterministicAdmissionCheck({
+    hypothesis: response,
+    reasoning: [],
+  }, allowed.indexOf(id));
+  const capturedAt = new Date().toISOString();
+
+  if (!admission.passed) {
+    item.updatedAt = capturedAt;
+    item.history.push({
+      at: capturedAt,
+      event: 'PUBLIC_MIND_KICKED_BACK',
+      detail: `${names[id]} response failed admission: ${admission.diagnostic}`,
+    });
+    return res.json({ case: item, admission });
+  }
+
   const submission: PublicMindSubmission = {
     id,
     name: names[id],
     provider: names[id],
     response,
-    capturedAt: new Date().toISOString(),
+    capturedAt,
     sourceMode: req.body?.sourceMode || 'PUBLIC_FRESH_SESSION',
   };
   item.submissions = [...item.submissions.filter((x) => x.id !== id), submission];
-  item.updatedAt = submission.capturedAt;
-  item.history.push({ at: submission.capturedAt, event: 'PUBLIC_MIND_CAPTURED', detail: `${submission.name} response captured as fresh external evidence.` });
-  return res.json({
-    case: item,
-    admission: deterministicAdmissionCheck({
-      hypothesis: response,
-      reasoning: [],
-    }, allowed.indexOf(id)),
-  });
+  item.updatedAt = capturedAt;
+  item.history.push({ at: capturedAt, event: 'PUBLIC_MIND_ADMITTED', detail: `${submission.name} response admitted as fresh external evidence.` });
+  return res.json({ case: item, admission });
 });
 
 app.post('/api/twin-mind/deliberate', async (req: Request, res: Response) => {
