@@ -5,7 +5,7 @@ import { mkdir, readFile, writeFile, rename } from 'fs/promises';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
 import { GoogleGenAI } from '@google/genai';
-import { deterministicAdmissionCheck, PUBLIC_MIND_IDS, type PublicMindId } from './src/engine/twinMindGovernance';
+import { buildPublicMindCasePrompt, deterministicAdmissionCheck, PUBLIC_MIND_IDS, type PublicMindId } from './src/engine/twinMindGovernance';
 
 dotenv.config();
 
@@ -56,6 +56,7 @@ interface TwinMindCase {
   challenges: PattyChallenge[];
   history: Array<{ at: string; event: string; detail: string }>;
   pattyConversation: Array<{ at: string; role: 'USER' | 'PATTY'; text: string }>;
+  bridgeToken?: string;
 }
 
 const twinMindCases = new Map<string, TwinMindCase>();
@@ -80,6 +81,7 @@ async function loadTwinMindCases() {
       item.submissions = Array.isArray(item.submissions) ? item.submissions : [];
       item.challenges = Array.isArray(item.challenges) ? item.challenges : [];
       item.pattyConversation = Array.isArray(item.pattyConversation) ? item.pattyConversation : [];
+      item.bridgeToken = item.bridgeToken || randomUUID();
       twinMindCases.set(item.id, item);
     }
   } catch (err: any) {
@@ -107,6 +109,7 @@ function createCase(problem: string): TwinMindCase {
     submissions: [],
     challenges: [],
     pattyConversation: [],
+    bridgeToken: randomUUID(),
     history: [{ at: now, event: 'CASE_CREATED', detail: 'Patty opened a persistent deliberation case.' }],
   };
   twinMindCases.set(item.id, item);
@@ -192,6 +195,50 @@ app.get('/api/twin-mind/cases/:caseId', (req: Request, res: Response) => {
   const item = twinMindCases.get(req.params.caseId);
   if (!item) return res.status(404).json({ error: 'Case not found.' });
   return res.json({ case: item });
+});
+
+app.options('/api/twin-mind/bridge/:caseId', (_req: Request, res: Response) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
+  return res.sendStatus(204);
+});
+
+app.get('/api/twin-mind/bridge/:caseId', (req: Request, res: Response) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  const item = twinMindCases.get(req.params.caseId);
+  if (!item || req.query.token !== item.bridgeToken) return res.status(404).json({ error: 'Bridge case not found.' });
+  return res.json({ caseId: item.id, problem: item.problem, packet: buildPublicMindCasePrompt(item.problem, item.id) });
+});
+
+app.post('/api/twin-mind/bridge/:caseId', async (req: Request, res: Response) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  const item = twinMindCases.get(req.params.caseId);
+  if (!item || req.body?.token !== item.bridgeToken) return res.status(404).json({ error: 'Bridge case not found.' });
+  const id = String(req.body?.id || '').toLowerCase() as PublicMindId;
+  const response = typeof req.body?.response === 'string' ? req.body.response.trim() : '';
+  if (!PUBLIC_MIND_IDS.includes(id) || response.length < 20) return res.status(400).json({ error: 'Recognized mind and substantive response required.' });
+  const names: Record<PublicMindId, string> = { chatgpt:'ChatGPT', claude:'Claude', gemini:'Gemini', grok:'Grok', perplexity:'Perplexity' };
+  const admission = deterministicAdmissionCheck({ hypothesis: response, reasoning: [] }, PUBLIC_MIND_IDS.indexOf(id));
+  const capturedAt = new Date().toISOString();
+  if (!admission.passed) {
+    item.updatedAt = capturedAt;
+    item.history.push({ at: capturedAt, event:'PUBLIC_MIND_KICKED_BACK', detail:`${names[id]} macro response failed admission: ${admission.diagnostic}` });
+    await persistTwinMindCases();
+    return res.json({ admitted:false, admission });
+  }
+  const prior = [...item.submissions].reverse().find(x => x.id === id);
+  const revision = (prior?.revision || 0) + 1;
+  const evidenceCore = { caseId:item.id, id, response, capturedAt, sourceMode:'PUBLIC_FRESH_SESSION', revision, parentEvidenceHash:prior?.evidenceHash };
+  const submission: PublicMindSubmission = {
+    evidenceId:`EVID-${randomUUID().toUpperCase()}`, evidenceHash:sha256(evidenceCore), id, name:names[id], provider:names[id],
+    response, capturedAt, sourceMode:'PUBLIC_FRESH_SESSION', revision, parentEvidenceHash:prior?.evidenceHash, admission,
+  };
+  item.submissions.push(submission);
+  item.updatedAt = capturedAt;
+  item.history.push({ at:capturedAt, event:'PUBLIC_MIND_ADMITTED', detail:`${names[id]} response admitted through Archie browser macro.` });
+  await persistTwinMindCases();
+  return res.json({ admitted:true, admission, evidenceHash:submission.evidenceHash });
 });
 
 app.post('/api/twin-mind/cases/:caseId/submissions', async (req: Request, res: Response) => {
