@@ -30,6 +30,7 @@ interface TwinMindArenaComponentProps {
   onCapturePublicMind: (id: PublicMindId, response: string) => Promise<any>;
   onTransmitToChek: (proposal: ConvergedProposal) => void;
   onTalkToPatty: (message: string) => Promise<string>;
+  onOpenCase: () => Promise<void>;
   pattyConversation: { at: string; role: 'USER' | 'PATTY'; text: string }[];
 }
 
@@ -46,6 +47,7 @@ export const TwinMindArenaComponent: React.FC<TwinMindArenaComponentProps> = ({
   onCapturePublicMind,
   onTransmitToChek,
   onTalkToPatty,
+  onOpenCase,
   pattyConversation,
 }) => {
   const [selectedMindId, setSelectedMindId] = useState<string>('charlie');
@@ -371,10 +373,13 @@ export const TwinMindArenaComponent: React.FC<TwinMindArenaComponentProps> = ({
           <div>
             <h3 className="text-sm font-black tracking-wide text-stone-100">TALK TO SARGENT PATTY</h3>
             <p className="text-xs text-stone-500 font-mono mt-1">
-              {twinMindCase ? `Active case: ${twinMindCase.id}` : 'Open a case first so Patty has a case record to discuss.'}
+              {twinMindCase ? `Active case: ${twinMindCase.id}` : 'No case is open yet. Open one here to talk to Patty.'}
             </p>
           </div>
-          <span className="text-[10px] font-mono text-amber-200 border border-amber-200/20 rounded px-2 py-1">HUMAN CONSOLE</span>
+          <div className="flex items-center gap-2">
+            {!twinMindCase && <button onClick={onOpenCase} className="text-[10px] font-mono font-bold text-black bg-amber-200 rounded px-3 py-1.5">Open Case</button>}
+            <span className="text-[10px] font-mono text-amber-200 border border-amber-200/20 rounded px-2 py-1">HUMAN CONSOLE</span>
+          </div>
         </div>
         <div className="max-h-72 overflow-y-auto rounded-lg border border-stone-800 bg-black/40 p-3 space-y-3">
           {pattyConversation.length === 0 ? (
