@@ -86,9 +86,8 @@ test('public mind admission is independent of self-claimed authority', () => {
   assert.match(authorityGrab.diagnostic, /authority/i);
 });
 
-test('public mind case prompt preserves independence and CHEK boundary', () => {
+test('public mind case prompt preserves uncontaminated independence', () => {
   const prompt = buildPublicMindCasePrompt('Evaluate proposal X', 'CASE-123');
-  assert.match(prompt, /independent reasoning participant/i);
-  assert.match(prompt, /Do not claim execution authority/i);
-  assert.match(prompt, /Evaluate proposal X/);
+  assert.equal(prompt, 'Evaluate proposal X');
+  assert.doesNotMatch(prompt, /Twin Mind|CHEK|independent reasoning participant|execution authority/i);
 });
