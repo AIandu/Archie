@@ -15,6 +15,7 @@ const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
 app.use(express.json({ limit: '10mb' }));
 
 const apiKey = process.env.GEMINI_API_KEY;
+const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
 let ai: GoogleGenAI | null = null;
 
 if (apiKey && apiKey !== 'MY_GEMINI_API_KEY' && apiKey.trim() !== '') {
@@ -30,6 +31,38 @@ if (apiKey && apiKey !== 'MY_GEMINI_API_KEY' && apiKey.trim() !== '') {
   } catch (err) {
     console.error('Failed to initialize Gemini AI:', err);
   }
+}
+
+
+function deterministicAdmissionCheck(mind: any, index: number) {
+  const reasoning = Array.isArray(mind?.reasoning) ? mind.reasoning.filter((x: any) => typeof x === 'string' && x.trim()) : [];
+  const hypothesis = typeof mind?.hypothesis === 'string' ? mind.hypothesis.trim() : '';
+  const kickedBackClaims: string[] = [];
+  if (hypothesis.length < 20) kickedBackClaims.push('Hypothesis is too thin to admit.');
+  if (reasoning.length < 2) kickedBackClaims.push('At least two explicit reasoning steps are required.');
+  const absolutePattern = /\b(guarantee[sd]?|proven|100%|impossible|zero risk|always|never fails)\b/i;
+  if (absolutePattern.test(hypothesis) && !reasoning.some((r: string) => /test|evidence|bound|measur|proof/i.test(r))) {
+    kickedBackClaims.push('Absolute claim lacks an explicit evidence/test/bound step.');
+  }
+  return {
+    passed: kickedBackClaims.length === 0,
+    checkerId: `CHECK-${String.fromCharCode(65 + index)}`,
+    kickedBackClaims,
+    diagnostic: kickedBackClaims.length ? kickedBackClaims.join(' ') : 'Deterministic admission checks passed for structure and unsupported absolute-claim pattern.',
+    verifiedAssumptions: [],
+  };
+}
+
+function normalizeMind(m: any, index: number) {
+  return {
+    id: m?.id || ['charlie','claude','gemini','athena','daedalus'][index],
+    name: m?.name || `Mind ${index + 1}`,
+    specialty: m?.specialty || 'General reasoning',
+    hypothesis: typeof m?.hypothesis === 'string' ? m.hypothesis : '',
+    reasoning: Array.isArray(m?.reasoning) ? m.reasoning.map(String).slice(0, 8) : [],
+    confidence: Math.max(0, Math.min(1, Number(m?.confidence ?? 0.5))),
+    outerCheck: deterministicAdmissionCheck(m, index),
+  };
 }
 
 app.get('/api/status', (req: Request, res: Response) => {
@@ -66,7 +99,7 @@ Generate concise, rigorous cognitive responses for the following minds, each pre
 4. Athena (Adversarial red-team, failure-mode exploitation, stress-testing)
 5. Daedalus (Architectural systems engineering, resource constraints, real-world execution)
 
-Also run their fast Outer Edge Checkers (Check A-E) to flag any weak assumptions, invalid steps, or kick back unverified claims.
+Do not self-certify or generate checker results. The server runs deterministic admission checks after your response.
 
 Return the response in valid JSON matching this schema:
 {
@@ -77,11 +110,6 @@ Return the response in valid JSON matching this schema:
       "specialty": "Formal Logic & Deductive Proof",
       "hypothesis": "string",
       "reasoning": ["step 1", "step 2", "step 3"],
-      "outerCheck": {
-        "passed": boolean,
-        "kickedBackClaims": ["any kicked back claim or empty if passed"],
-        "diagnostic": "outer checker evaluation report"
-      },
       "confidence": number (0-1)
     },
     ...
@@ -89,7 +117,7 @@ Return the response in valid JSON matching this schema:
 }`;
 
       const response = await ai.models.generateContent({
-        model: 'gemini-3.8-flash',
+        model: GEMINI_MODEL,
         contents: prompt,
         config: {
           responseMimeType: 'application/json',
@@ -98,15 +126,15 @@ Return the response in valid JSON matching this schema:
       });
 
       const parsed = JSON.parse(response.text || '{}');
-      return res.json(parsed);
+      const rawMinds = Array.isArray(parsed.minds) ? parsed.minds : [];
+      return res.json({ minds: rawMinds.slice(0, 5).map(normalizeMind) });
     } catch (err: any) {
       console.warn('Gemini deliberation error, using fallback:', err?.message);
     }
   }
 
   // Deterministic high-fidelity fallback
-  return res.json({
-    minds: [
+  const fallbackMinds = [
       {
         id: 'charlie',
         name: 'Mind Charlie',
@@ -192,8 +220,8 @@ Return the response in valid JSON matching this schema:
         },
         confidence: 0.92,
       },
-    ],
-  });
+    ];
+  return res.json({ minds: fallbackMinds.map(normalizeMind) });
 });
 
 app.post('/api/twin-mind/patty-converge', async (req: Request, res: Response) => {
@@ -247,7 +275,7 @@ Return valid JSON:
 }`;
 
       const response = await ai.models.generateContent({
-        model: 'gemini-3.8-flash',
+        model: GEMINI_MODEL,
         contents: prompt,
         config: {
           responseMimeType: 'application/json',
