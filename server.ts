@@ -110,7 +110,7 @@ app.get('/api/status', (req: Request, res: Response) => {
     timestamp: new Date().toISOString(),
     geminiLive: Boolean(ai),
     pattyLive: Boolean(OPENAI_API_KEY || ai),
-    pattyProvider: OPENAI_API_KEY ? `OpenAI:${PATTY_MODEL}` : ai ? `Gemini:${GEMINI_MODEL}` : 'deterministic-demo',
+    pattyProvider: OPENAI_API_KEY ? `OpenAI:${PATTY_MODEL}` : ai ? `Gemini:${GEMINI_MODEL}` : 'offline',
     architecture: {
       womb: 'Governed pre-activation',
       substrate: 'Virtual Neuromorphic Spiking Chip (LIF + STDP)',
@@ -338,7 +338,7 @@ Admitted public-mind evidence: ${JSON.stringify(publicEvidence)}
 Produce either a defensible convergence or a precise evidence deficit. Do not invent experiments, measurements, signatures, or facts that are absent from the evidence.
 Return JSON:
 {
-  "dialogue": [{"speaker":"Sargent Patty","target":"string","instruction":"string","response":"string"}],
+  "dialogue": [{"speaker":"Sargent Patty","target":"one of the submitted public minds","instruction":"a challenge/reconstruction task for that mind","response":""}],
   "disputedAssumption":"string",
   "reconstructedEvidence":"string",
   "status":"CONVERGED_DEFENSIBLE" | "EVIDENCE_DEFICIT",
@@ -347,13 +347,20 @@ Return JSON:
     "title":"string","coreDecision":"string","computationalProof":"string","defensibilityPact":"string",
     "targetSubstrateAction":{"target":"string","actionType":"STATE_TRANSITION" | "ACTUATOR_DISPATCH" | "WEIGHT_REBALANCE","parameters":{},"riskScore":number}
   }
-}`;
+}
+
+IMPORTANT: Never write a public mind's reply yourself. Every dialogue.response MUST be an empty string. If another round is needed, issue the challenge in dialogue.instruction and return EVIDENCE_DEFICIT until a real external response is captured and admitted.`;
+
+  const sanitizePatty = (parsed: any) => {
+    if (Array.isArray(parsed?.dialogue)) parsed.dialogue = parsed.dialogue.map((x: any) => ({ ...x, speaker: 'Sargent Patty', response: '' }));
+    return parsed;
+  };
 
   if (OPENAI_API_KEY) {
     try {
       const text = await runPattyOpenAI(pattyPrompt);
       if (text) {
-        const parsed = JSON.parse(text);
+        const parsed = sanitizePatty(JSON.parse(text));
         if (persistentCase) {
           const now = new Date().toISOString();
           persistentCase.updatedAt = now;
@@ -379,8 +386,8 @@ Return JSON:
         },
       });
 
-      const parsed = JSON.parse(response.text || '{}');
-      return res.json(parsed);
+      const parsed = sanitizePatty(JSON.parse(response.text || '{}'));
+      return res.json({ ...parsed, caseId: persistentCase?.id, pattyProvider: `Gemini:${GEMINI_MODEL}` });
     } catch (err: any) {
       console.warn('Patty convergence error, fallback:', err?.message);
     }
