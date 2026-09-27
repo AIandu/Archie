@@ -105,6 +105,7 @@ export interface TwinMindCase {
   challenges: PattyChallenge[];
   history: { at: string; event: string; detail: string }[];
   pattyConversation?: { id: string; at: string; role: 'USER' | 'PATTY'; text: string; provider?: string }[];
+  bridgeToken?: string;
 }
 
 export interface OuterMind {
