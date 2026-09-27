@@ -57,6 +57,7 @@ interface TwinMindCase {
   history: Array<{ at: string; event: string; detail: string }>;
   pattyConversation: Array<{ at: string; role: 'USER' | 'PATTY'; text: string }>;
   bridgeToken?: string;
+  pattyState?: { lastReasoningMode: 'COGNITIVE' | 'PREDICTIVE' | 'GENERATIVE' | 'DECISIVE'; twinMindRecommended: boolean; reason: string; };
   lastConvergence?: {
     at: string;
     status: 'CONVERGED_DEFENSIBLE' | 'EVIDENCE_DEFICIT';
@@ -186,7 +187,8 @@ app.get('/api/status', (req: Request, res: Response) => {
       womb: 'Governed pre-activation',
       substrate: 'Virtual Neuromorphic Spiking Chip (LIF + STDP)',
       twinMind: 'Independent Public Minds + Deterministic Admission Checkers + Persistent Sargent Patty',
-      chek: 'Independent Authority Verification (Intake -> Auditor -> Verifier -> Vault)',
+      governor: 'Deterministic consequential-action authority gate',
+      chek: 'Independent non-authorizing verification (Evidence Auditor -> Rule Checker -> Conformance Gateway -> Vault)',
       execution: 'Controlled Output Bus & Feedback Loop',
       caseStore: `Host file: ${CASE_STORE_PATH} (mount persistent storage for durable deployment)`,
     },
@@ -332,16 +334,51 @@ app.post('/api/twin-mind/cases/:caseId/patty-chat', async (req: Request, res: Re
   item.pattyConversation ||= [];
   item.pattyConversation.push({ at: new Date().toISOString(), role: 'USER', text: message });
   const evidence = item.submissions.map((x) => ({ mind: x.name, evidenceHash: x.evidenceHash, response: x.response, revision: x.revision }));
-  const prompt = 'You are Sargent Patty, the human-facing convergence controller inside Archie Twin Mind. Answer the operator directly from the persistent case record. Be concise. Distinguish admitted evidence from assumptions. Never invent evidence, public-mind replies, measurements, or CHEK approval. Conversation never grants execution authority; CHEK remains independent. Return JSON only with one field named reply. CASE: ' + JSON.stringify({ id: item.id, problem: item.problem, evidence, challenges: item.challenges, recentConversation: item.pattyConversation.slice(-10), operatorMessage: message });
+  const continuity = [...twinMindCases.values()]
+    .filter((x) => x.id !== item.id)
+    .sort((a,b) => b.updatedAt.localeCompare(a.updatedAt))
+    .slice(0, 12)
+    .map((x) => ({ caseId:x.id, problem:x.problem, updatedAt:x.updatedAt, status:x.lastConvergence?.status || 'OPEN', decision:x.lastConvergence?.convergedProposal?.coreDecision || null }));
+  const prompt = `You are Sargent Patty, the human-facing cognitive partner inside Archie. You think WITH the operator, never over them.
+
+TRUTH PROTOCOL:
+1. Separate known facts, admitted evidence, inference, uncertainty, and ideas. Never turn an assumption into a fact.
+2. Never invent evidence, measurements, public-mind replies, project history, tool results, Governor approval, CHEK verification, or execution.
+3. Correct the operator when evidence requires it, and correct yourself immediately when a premise fails.
+4. Give useful answers first. Do not bury the answer under caveats or endless "maybe" language.
+5. For ideation, generate genuinely different options and develop the strongest ones. For prediction, state the drivers and uncertainty. For decisions, make the reasoning explicit without pretending uncertainty is gone.
+6. Preserve human agency. Your conclusion is cognition, not authority.
+7. Capability does not confer permission. Governor authorizes consequential actions. CHEK independently verifies the governed chain.
+8. Invoke Twin Mind selectively, not ceremonially. Recommend escalation when independent cognition would materially improve the answer: consequential/high-stakes choices, unresolved factual disputes, weak evidence, meaningful prediction uncertainty, adversarial review, or when the operator explicitly asks for the minds. Do not escalate ordinary conversation or straightforward creative work.
+
+Choose the primary reasoning mode for this turn: COGNITIVE, PREDICTIVE, GENERATIVE, or DECISIVE. You may blend modes in the reply.
+Return JSON only:
+{"reply":"natural direct answer to the operator","reasoningMode":"COGNITIVE|PREDICTIVE|GENERATIVE|DECISIVE","twinMind":{"recommended":true|false,"reason":"short reason; empty when false"}}
+
+ACTIVE CASE + VERIFIED CONTINUITY INDEX:
+${JSON.stringify({ id:item.id, problem:item.problem, admittedEvidence:evidence, challenges:item.challenges, lastConvergence:item.lastConvergence || null, recentConversation:item.pattyConversation.slice(-16), continuityIndex:continuity, operatorMessage:message })}`;
   let reply = '';
+  let reasoningMode: 'COGNITIVE' | 'PREDICTIVE' | 'GENERATIVE' | 'DECISIVE' = 'COGNITIVE';
+  let twinMindRecommended = false;
+  let twinMindReason = '';
   try {
     if (OPENAI_API_KEY) {
       const raw = await runPattyOpenAI(prompt);
-      if (raw) reply = String(JSON.parse(raw)?.reply || '').trim();
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        reply = String(parsed?.reply || '').trim();
+        if (['COGNITIVE','PREDICTIVE','GENERATIVE','DECISIVE'].includes(parsed?.reasoningMode)) reasoningMode = parsed.reasoningMode;
+        twinMindRecommended = parsed?.twinMind?.recommended === true;
+        twinMindReason = twinMindRecommended ? String(parsed?.twinMind?.reason || 'Independent reasoning would materially strengthen this answer.') : '';
+      }
     }
     if (!reply && ai) {
       const response = await ai.models.generateContent({ model: GEMINI_MODEL, contents: prompt, config: { responseMimeType: 'application/json', temperature: 0.3 } });
-      reply = String(JSON.parse(response.text || '{}')?.reply || '').trim();
+      const parsed = JSON.parse(response.text || '{}');
+      reply = String(parsed?.reply || '').trim();
+      if (['COGNITIVE','PREDICTIVE','GENERATIVE','DECISIVE'].includes(parsed?.reasoningMode)) reasoningMode = parsed.reasoningMode;
+      twinMindRecommended = parsed?.twinMind?.recommended === true;
+      twinMindReason = twinMindRecommended ? String(parsed?.twinMind?.reason || 'Independent reasoning would materially strengthen this answer.') : '';
     }
   } catch (err: any) {
     console.warn('Patty chat error:', err?.message);
@@ -349,10 +386,11 @@ app.post('/api/twin-mind/cases/:caseId/patty-chat', async (req: Request, res: Re
   }
   if (!reply) return res.status(503).json({ error: 'Patty is offline.' });
   item.pattyConversation.push({ at: new Date().toISOString(), role: 'PATTY', text: reply });
+  item.pattyState = { lastReasoningMode: reasoningMode, twinMindRecommended, reason: twinMindReason };
   item.updatedAt = new Date().toISOString();
   item.history.push({ at: item.updatedAt, event: 'PATTY_OPERATOR_EXCHANGE', detail: 'Patty answered the operator from the persistent case record.' });
   await persistTwinMindCases();
-  return res.json({ reply, case: item });
+  return res.json({ reply, reasoningMode, twinMind: { recommended: twinMindRecommended, reason: twinMindReason }, case: item });
 });
 
 app.post('/api/twin-mind/patty-converge', async (req: Request, res: Response) => {
