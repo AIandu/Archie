@@ -210,7 +210,7 @@ export default function App() {
       });
       if (!created.ok) throw new Error(await created.text());
       activeCase = (await created.json()).case;
-      applyPersistentCase(activeCase);
+      applyPersistentCase(activeCase!);
       await refreshCaseHistory();
     }
     const res = await fetch(`/api/twin-mind/cases/${activeCase!.id}/submissions`, {
