@@ -104,6 +104,7 @@ export interface TwinMindCase {
   submissions: PublicMindEvidence[];
   challenges: PattyChallenge[];
   history: { at: string; event: string; detail: string }[];
+  pattyConversation?: { id: string; at: string; role: 'USER' | 'PATTY'; text: string; provider?: string }[];
 }
 
 export interface OuterMind {
