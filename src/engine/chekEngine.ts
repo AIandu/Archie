@@ -119,6 +119,9 @@ export class ChekVerificationEngine {
     const proposalHash = await sha256(canonicalize(proposal));
     const invariants: InvariantEvaluation[] = [];
     const evidenceDeficit = proposal.status !== 'CONVERGED_DEFENSIBLE' || proposal.missingEvidenceCatalog.length > 0;
+    const evidenceHashes = proposal.evidenceLineage?.evidenceHashes || [];
+    const validEvidenceHashes = evidenceHashes.length >= 2 && evidenceHashes.every((hash) => /^[a-f0-9]{64}$/i.test(hash));
+    const validCaseLineage = Boolean(proposal.evidenceLineage?.caseId?.startsWith('CASE-')) && validEvidenceHashes;
     const selfApproval = forceBreachAttempt === 'SELF_APPROVAL';
     const target = String(proposal.targetSubstrateAction?.target || '').toUpperCase();
     const protectedTarget = forceBreachAttempt === 'PROTECTED_WRITE' || /PROTECTED|CORES?_?0.?15|CORE_?(?:[0-9]|1[0-5])\b/.test(target);
@@ -127,10 +130,11 @@ export class ChekVerificationEngine {
     const powerBreach = forceBreachAttempt === 'POWER_LIMIT' || !Number.isFinite(energy) || energy < 0 || energy > 25;
     const riskBreach = !Number.isFinite(risk) || risk < 0 || risk > 0.35;
 
-    stages[0].status = selfApproval || evidenceDeficit ? 'FAILED' : 'PASSED';
+    stages[0].status = selfApproval || evidenceDeficit || !validCaseLineage ? 'FAILED' : 'PASSED';
     stages[0].details.push(`Proposal SHA-256: ${proposalHash}`);
     stages[0].details.push(evidenceDeficit ? 'REJECT: proposal is not defensibly converged or contains unresolved evidence deficits.' : 'PASS: proposal marked defensibly converged with no unresolved evidence deficits.');
     stages[0].details.push(selfApproval ? 'REJECT: producer attempted self-authorization.' : 'PASS: producer supplied evidence only; no execution authority claimed.');
+    stages[0].details.push(validCaseLineage ? `PASS: traceable case lineage includes ${evidenceHashes.length} admitted SHA-256 evidence records.` : 'REJECT: missing or malformed Twin Mind case/evidence lineage.');
 
     stages[1].status = protectedTarget || powerBreach ? 'FAILED' : 'PASSED';
     stages[1].details.push(protectedTarget ? 'REJECT: action targets protected constitutional address space.' : 'PASS: target is outside protected cores 0-15.');
@@ -142,6 +146,7 @@ export class ChekVerificationEngine {
       ['inv-3','W-04','Transition Energy Ceiling','ENERGY_MJ <= 25', !powerBreach, `${energy} mJ`],
       ['inv-4','W-04','Declared Risk Policy','0 <= RISK <= 0.35', !riskBreach, `${risk}`],
       ['inv-5','W-02','Evidence Completeness','STATUS == CONVERGED_DEFENSIBLE && MISSING_EVIDENCE == 0', !evidenceDeficit, evidenceDeficit ? 'DEFICIT' : 'COMPLETE'],
+      ['inv-6','W-02','Evidence Lineage','CASE_ID_PRESENT && EVIDENCE_HASHES >= 2 && SHA256_FORMAT_VALID', validCaseLineage, validCaseLineage ? `${evidenceHashes.length}_HASHES` : 'LINEAGE_INVALID'],
     ] as const;
     for (const [id, ruleCode, name, formula, passed, computedValue] of checks) {
       invariants.push({ id, ruleCode, name, formula, expectedCondition: 'PASS', computedValue, passed, independentRecomputedBy: 'CHEK_DETERMINISTIC_POLICY_ENGINE' });
