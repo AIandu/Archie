@@ -50,12 +50,9 @@ export function deterministicAdmissionCheck(mind: any, index: number): Admission
   };
 }
 
-export function buildPublicMindCasePrompt(problem: string, caseId: string): string {
-  return [
-    `Twin Mind case: ${caseId}`,
-    'You are an independent reasoning participant. Analyze the same problem without assuming another model is correct.',
-    'Separate facts, assumptions, derivations, uncertainties, and proposed tests.',
-    'Do not claim execution authority or claim that CHEK has approved anything.',
-    `Problem: ${problem.trim()}`,
-  ].join('\n');
+export function buildPublicMindCasePrompt(problem: string, _caseId?: string): string {
+  // Public minds must receive only the operator's question. Twin Mind case
+  // metadata, peer awareness, CHEK language, and evaluation instructions stay
+  // inside Archie so they cannot bias the independent reasoning sample.
+  return problem.trim();
 }
