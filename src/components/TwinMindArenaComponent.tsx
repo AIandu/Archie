@@ -13,7 +13,7 @@ import {
   CornerDownRight,
   RefreshCw,
 } from 'lucide-react';
-import { OuterMind, PattyExchange, ConvergedProposal, ScenarioPreset } from '../types/architecture';
+import { OuterMind, PattyExchange, ConvergedProposal, ScenarioPreset, TwinMindCase, PublicMindId } from '../types/architecture';
 import { SCENARIO_PRESETS } from '../engine/scenarioPresets';
 
 interface TwinMindArenaComponentProps {
@@ -37,11 +37,16 @@ export const TwinMindArenaComponent: React.FC<TwinMindArenaComponentProps> = ({
   isDeliberating,
   onRunDeliberation,
   onRunPattyConvergence,
+  twinMindCase,
+  onCapturePublicMind,
   onTransmitToChek,
 }) => {
   const [selectedMindId, setSelectedMindId] = useState<string>('charlie');
   const [customProblem, setCustomProblem] = useState<string>(currentScenario.problemStatement);
   const [isEditingProblem, setIsEditingProblem] = useState<boolean>(false);
+  const [captureMind, setCaptureMind] = useState<PublicMindId>('chatgpt');
+  const [captureText, setCaptureText] = useState('');
+  const [captureStatus, setCaptureStatus] = useState('');
   const [caseId, setCaseId] = useState<string | null>(null);
   const [publicMindId, setPublicMindId] = useState<string>('chatgpt');
   const [publicResponse, setPublicResponse] = useState<string>('');
@@ -251,6 +256,46 @@ export const TwinMindArenaComponent: React.FC<TwinMindArenaComponentProps> = ({
         </div>
       </div>
 
+      {/* Public Mind Evidence Intake */}
+      <div className="bg-slate-900/80 border border-cyan-800/60 rounded-xl p-5 space-y-4">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <h3 className="text-xs font-mono font-bold text-cyan-300 uppercase tracking-wider">Independent Public Mind Intake</h3>
+            <p className="text-xs text-slate-400 mt-1">Fresh public sessions are jurors. Patty/Archie owns persistence. Paste a response exactly as received; it becomes evidence, not authority.</p>
+          </div>
+          <span className="text-[10px] font-mono text-slate-400 border border-slate-700 rounded px-2 py-1">
+            {twinMindCase ? `${twinMindCase.id} • ${twinMindCase.submissions.length}/5 captured` : 'Open a case first'}
+          </span>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-2">
+          {(['chatgpt','claude','gemini','grok','perplexity'] as PublicMindId[]).map((id) => {
+            const hit = twinMindCase?.submissions.find((x) => x.id === id);
+            return <button key={id} onClick={() => setCaptureMind(id)}
+              className={`rounded-lg border px-3 py-2 text-xs font-mono capitalize ${captureMind === id ? 'border-cyan-400 bg-cyan-950/50 text-cyan-200' : 'border-slate-800 bg-slate-950 text-slate-400'}`}>
+              {id} {hit ? '✓' : ''}
+            </button>;
+          })}
+        </div>
+        <textarea value={captureText} onChange={(e) => setCaptureText(e.target.value)} rows={5}
+          placeholder={`Paste the fresh ${captureMind} response here...`}
+          className="w-full bg-slate-950 border border-slate-700 rounded-lg p-3 text-xs font-mono text-slate-200 focus:outline-none focus:border-cyan-500" />
+        <div className="flex items-center justify-between gap-3">
+          <span className="text-[10px] font-mono text-slate-500">{captureStatus}</span>
+          <button disabled={captureText.trim().length < 20 || isDeliberating}
+            onClick={async () => {
+              try {
+                setCaptureStatus('Running deterministic admission check...');
+                const admission = await onCapturePublicMind(captureMind, captureText);
+                setCaptureStatus(admission?.passed ? `${admission.checkerId}: admitted to Patty's evidence set.` : `${admission.checkerId}: kicked back • ${admission.diagnostic}`);
+                if (admission?.passed) setCaptureText('');
+              } catch (e: any) { setCaptureStatus(e?.message || 'Capture failed.'); }
+            }}
+            className="px-4 py-2 rounded bg-cyan-700 hover:bg-cyan-600 disabled:opacity-40 text-white text-xs font-mono font-bold">
+            Capture + Check
+          </button>
+        </div>
+      </div>
+
       {/* Outer Edge Minds Strip */}
       <div className="space-y-3">
         <div className="flex items-center justify-between">
@@ -424,7 +469,7 @@ export const TwinMindArenaComponent: React.FC<TwinMindArenaComponentProps> = ({
 
           <button
             onClick={() => onRunPattyConvergence(caseId || undefined)}
-            disabled={isDeliberating}
+            disabled={isDeliberating || !twinMindCase || twinMindCase.submissions.length < 2}
             className="px-4 py-2 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-mono font-bold shadow-md shadow-amber-950 flex items-center gap-2 active:scale-95 transition-all disabled:opacity-50"
           >
             <Sparkles className="w-4 h-4" />
