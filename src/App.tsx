@@ -52,6 +52,7 @@ export default function App() {
   const [minds, setMinds] = useState<OuterMind[]>(SCENARIO_PRESETS[0].defaultMindsData);
   const [twinMindCase, setTwinMindCase] = useState<TwinMindCase | null>(null);
   const [pattyDialogue, setPattyDialogue] = useState<PattyExchange[]>([]);
+  const [pattyConversation, setPattyConversation] = useState<{ at: string; role: 'USER' | 'PATTY'; text: string }[]>([]);
   const [convergedProposal, setConvergedProposal] = useState<ConvergedProposal | null>(null);
 
   // CHEK State
@@ -88,6 +89,7 @@ export default function App() {
     setConvergedProposal(null);
     setTwinMindCase(null);
     setPattyDialogue([]);
+    setPattyConversation([]);
     setLatestVaultRecord(null);
     setExecutionResult(null);
   };
@@ -157,6 +159,23 @@ export default function App() {
     const data = await res.json();
     setTwinMindCase(data.case);
     return data.admission;
+  };
+
+  const handleTalkToPatty = async (message: string) => {
+    if (!twinMindCase) throw new Error('Open a case first.');
+    const optimistic = [...pattyConversation, { at: new Date().toISOString(), role: 'USER' as const, text: message }];
+    setPattyConversation(optimistic);
+    const res = await fetch(`/api/twin-mind/cases/${twinMindCase.id}/patty-chat`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message }),
+    });
+    if (!res.ok) {
+      setPattyConversation(pattyConversation);
+      throw new Error(await res.text());
+    }
+    const data = await res.json();
+    setTwinMindCase(data.case);
+    setPattyConversation(data.case?.pattyConversation || [...optimistic, { at: new Date().toISOString(), role: 'PATTY', text: data.reply }]);
+    return data.reply;
   };
 
   const handleRunPattyConvergence = async () => {
@@ -348,6 +367,8 @@ export default function App() {
             twinMindCase={twinMindCase}
             onCapturePublicMind={handleCapturePublicMind}
             onTransmitToChek={handleTransmitToChek}
+            onTalkToPatty={handleTalkToPatty}
+            pattyConversation={pattyConversation}
           />
         )}
 
