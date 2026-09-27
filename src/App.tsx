@@ -206,6 +206,31 @@ export default function App() {
     } finally { setIsDeliberating(false); }
   };
 
+  const handleStartPattyCase = async (message: string) => {
+    const problem = message.trim();
+    if (!problem) throw new Error('Tell Patty what you want to work on.');
+    setIsDeliberating(true);
+    try {
+      const created = await fetch('/api/twin-mind/cases', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ problem }),
+      });
+      if (!created.ok) throw new Error(await created.text());
+      const createdCase = (await created.json()).case as TwinMindCase;
+      applyPersistentCase(createdCase);
+      setPattyDialogue([]);
+      setConvergedProposal(null);
+      const chat = await fetch(`/api/twin-mind/cases/${createdCase.id}/patty-chat`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message: problem }),
+      });
+      if (!chat.ok) throw new Error(await chat.text());
+      const data = await chat.json();
+      applyPersistentCase(data.case);
+      setPattyConversation(data.case?.pattyConversation || []);
+      await refreshCaseHistory();
+      return data.reply as string;
+    } finally { setIsDeliberating(false); }
+  };
+
   const handleCapturePublicMind = async (id: PublicMindId, response: string) => {
     let activeCase = twinMindCase;
     if (!activeCase) {
@@ -441,6 +466,7 @@ export default function App() {
             convergedProposal={convergedProposal}
             isDeliberating={isDeliberating}
             onRunDeliberation={handleRunDeliberation}
+            onStartPattyCase={handleStartPattyCase}
             onRunPattyConvergence={handleRunPattyConvergence}
             twinMindCase={twinMindCase}
             onCapturePublicMind={handleCapturePublicMind}
