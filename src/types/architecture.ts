@@ -104,8 +104,18 @@ export interface TwinMindCase {
   submissions: PublicMindEvidence[];
   challenges: PattyChallenge[];
   history: { at: string; event: string; detail: string }[];
-  pattyConversation?: { id: string; at: string; role: 'USER' | 'PATTY'; text: string; provider?: string }[];
+  pattyConversation?: { id?: string; at: string; role: 'USER' | 'PATTY'; text: string; provider?: string }[];
   bridgeToken?: string;
+  lastConvergence?: {
+    at: string;
+    status: 'CONVERGED_DEFENSIBLE' | 'EVIDENCE_DEFICIT';
+    disputedAssumption: string;
+    reconstructedEvidence: string;
+    missingEvidenceCatalog: string[];
+    convergedProposal: Omit<ConvergedProposal, 'id' | 'producerSignatures' | 'evidenceLineage' | 'disputedAssumptionResolved' | 'missingEvidenceCatalog' | 'status'> | null;
+    dialogue: Omit<PattyExchange, 'round'>[];
+    pattyProvider: string;
+  };
 }
 
 export interface OuterMind {
