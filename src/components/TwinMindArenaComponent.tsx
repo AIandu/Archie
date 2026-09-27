@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Copy, CheckCircle2, AlertCircle, ChevronDown, ChevronUp, ExternalLink } from 'lucide-react';
 import { ConvergedProposal, ScenarioPreset, TwinMindCase, PublicMindId } from '../types/architecture';
 import { buildPublicMindCasePrompt } from '../engine/twinMindGovernance';
+import { buildMacroBookmarklet, buildMindLaunchUrl } from '../engine/publicMindMacro';
 
 interface Props {
   currentScenario: ScenarioPreset;
@@ -39,6 +40,7 @@ export const TwinMindArenaComponent: React.FC<Props> = ({
   const [status, setStatus] = useState('');
   const [pattyInput, setPattyInput] = useState('');
   const [showEvidence, setShowEvidence] = useState(false);
+  const [showMacroSetup, setShowMacroSetup] = useState(false);
 
   const uniqueMinds = new Set((twinMindCase?.submissions || []).map(x => x.id)).size;
   const activeQuestion = twinMindCase?.problem || '';
@@ -59,12 +61,19 @@ export const TwinMindArenaComponent: React.FC<Props> = ({
     setTimeout(() => setStatus(''), 2000);
   };
 
+  const launchUrl = (mind: typeof PUBLIC_MINDS[number]) => {
+    if (!twinMindCase?.bridgeToken) return mind.url;
+    return buildMindLaunchUrl(mind.url, {
+      caseId: twinMindCase.id, token: twinMindCase.bridgeToken, mindId: mind.id, bridgeOrigin: window.location.origin,
+    });
+  };
+
   const openMind = async (mind: typeof PUBLIC_MINDS[number]) => {
     if (!packet) return;
     try { await navigator.clipboard.writeText(packet); } catch {}
     setCaptureMind(mind.id);
-    window.open(mind.url, mind.id);
-    setStatus(`${mind.label} opened. The identical Archie packet is on your clipboard. Paste, submit, then bring the answer back here.`);
+    window.open(launchUrl(mind), mind.id);
+    setStatus(`${mind.label} opened with the active Archie case attached. Run the Archie Macro bookmark there; it will submit and return the answer automatically.`);
   };
 
   const openAllMinds = async () => {
@@ -72,12 +81,18 @@ export const TwinMindArenaComponent: React.FC<Props> = ({
     try { await navigator.clipboard.writeText(packet); } catch {}
     let opened = 0;
     for (const mind of PUBLIC_MINDS) {
-      const win = window.open(mind.url, mind.id);
+      const win = window.open(launchUrl(mind), mind.id);
       if (win) opened++;
     }
     setStatus(opened === PUBLIC_MINDS.length
-      ? 'Five public minds opened. The identical Archie packet is on your clipboard.'
-      : `Opened ${opened}/5 tabs. Your browser blocked the rest; use the individual Open buttons below.`);
+      ? 'Five public minds opened with this Archie case attached. Run the Archie Macro in each tab.'
+      : `Opened ${opened}/5 tabs. Your browser blocked the rest; use the individual Open buttons.`);
+  };
+
+  const copyMacro = async () => {
+    await navigator.clipboard.writeText(buildMacroBookmarklet());
+    setStatus('Archie Macro copied. Save it once as a browser bookmark URL named Archie Macro.');
+    setShowMacroSetup(true);
   };
 
   const capture = async () => {
@@ -116,10 +131,14 @@ export const TwinMindArenaComponent: React.FC<Props> = ({
         <div><p className="text-[11px] font-mono tracking-[.18em] text-amber-200/70">THE FIVE MINDS</p>
           <p className="text-sm text-stone-400 mt-1">{uniqueMinds}/5 independent responses admitted</p></div>
         <div className="flex flex-wrap gap-2">
-          <button onClick={copyPacket} className="flex items-center gap-2 rounded-lg border border-amber-200/20 px-3 py-2 text-xs text-amber-100"><Copy size={14}/> Copy packet</button>
           <button onClick={openAllMinds} className="flex items-center gap-2 rounded-lg bg-gradient-to-r from-[#9b7a3f] to-[#c8a96b] px-3 py-2 text-xs font-bold text-black"><ExternalLink size={14}/> Open Five Minds</button>
+          <button onClick={copyMacro} className="flex items-center gap-2 rounded-lg border border-amber-200/20 px-3 py-2 text-xs text-amber-100"><Copy size={14}/> Install / Copy Macro</button>
+          <button onClick={copyPacket} className="flex items-center gap-2 rounded-lg border border-stone-800 px-3 py-2 text-xs text-stone-500"><Copy size={14}/> Manual fallback</button>
         </div>
       </div>
+      {showMacroSetup && <div className="rounded-xl border border-amber-200/15 bg-black/40 p-4 text-xs text-stone-400">
+        <b className="text-stone-200">One-time macro setup:</b> the button copied a bookmark URL beginning with <code className="text-amber-100">javascript:</code>. Save any bookmark in your browser, edit its name to <b>Archie Macro</b>, and replace its URL with what was copied. After that: open the five minds from Archie and run <b>Archie Macro</b> on each AI tab. The macro finds the input, inserts this case, submits it, waits for the answer, and sends the captured response back to this case. If a site changes its page controls and cannot be detected, use Manual fallback rather than fabricating a response.
+      </div>}
       <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
         {PUBLIC_MINDS.map(m => {
           const admitted=twinMindCase.submissions.some(x=>x.id===m.id);
