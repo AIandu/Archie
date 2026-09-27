@@ -57,6 +57,16 @@ interface TwinMindCase {
   history: Array<{ at: string; event: string; detail: string }>;
   pattyConversation: Array<{ at: string; role: 'USER' | 'PATTY'; text: string }>;
   bridgeToken?: string;
+  lastConvergence?: {
+    at: string;
+    status: 'CONVERGED_DEFENSIBLE' | 'EVIDENCE_DEFICIT';
+    disputedAssumption: string;
+    reconstructedEvidence: string;
+    missingEvidenceCatalog: string[];
+    convergedProposal: any;
+    dialogue: any[];
+    pattyProvider: string;
+  };
 }
 
 const twinMindCases = new Map<string, TwinMindCase>();
@@ -189,6 +199,21 @@ app.post('/api/twin-mind/cases', async (req: Request, res: Response) => {
   const item = createCase(problem);
   await persistTwinMindCases();
   return res.json({ case: item });
+});
+
+app.get('/api/twin-mind/cases', (_req: Request, res: Response) => {
+  const cases = [...twinMindCases.values()]
+    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+    .map((item) => ({
+      id: item.id,
+      problem: item.problem,
+      createdAt: item.createdAt,
+      updatedAt: item.updatedAt,
+      submissionCount: item.submissions.length,
+      challengeCount: item.challenges.length,
+      lastStatus: item.lastConvergence?.status || null,
+    }));
+  return res.json({ cases });
 });
 
 app.get('/api/twin-mind/cases/:caseId', (req: Request, res: Response) => {
@@ -399,6 +424,16 @@ IMPORTANT: Never write a public mind's reply yourself. Every dialogue.response M
         if (persistentCase) {
           const now = new Date().toISOString();
           persistentCase.updatedAt = now;
+          persistentCase.lastConvergence = {
+            at: now,
+            status: parsed.status || 'EVIDENCE_DEFICIT',
+            disputedAssumption: parsed.disputedAssumption || '',
+            reconstructedEvidence: parsed.reconstructedEvidence || '',
+            missingEvidenceCatalog: Array.isArray(parsed.missingEvidenceCatalog) ? parsed.missingEvidenceCatalog : [],
+            convergedProposal: parsed.convergedProposal || null,
+            dialogue: Array.isArray(parsed.dialogue) ? parsed.dialogue : [],
+            pattyProvider: `OpenAI:${PATTY_MODEL}`,
+          };
           persistentCase.history.push({ at: now, event: 'PATTY_CONVERGENCE', detail: parsed.status || 'UNKNOWN' });
           await persistTwinMindCases();
         }
@@ -442,6 +477,16 @@ IMPORTANT: Never write a public mind's reply yourself. Every dialogue.response M
       if (persistentCase) {
         const now = new Date().toISOString();
         persistentCase.updatedAt = now;
+        persistentCase.lastConvergence = {
+          at: now,
+          status: parsed.status || 'EVIDENCE_DEFICIT',
+          disputedAssumption: parsed.disputedAssumption || '',
+          reconstructedEvidence: parsed.reconstructedEvidence || '',
+          missingEvidenceCatalog: Array.isArray(parsed.missingEvidenceCatalog) ? parsed.missingEvidenceCatalog : [],
+          convergedProposal: parsed.convergedProposal || null,
+          dialogue: Array.isArray(parsed.dialogue) ? parsed.dialogue : [],
+          pattyProvider: `Gemini:${GEMINI_MODEL}`,
+        };
         persistentCase.history.push({ at: now, event: 'PATTY_CONVERGENCE', detail: parsed.status || 'UNKNOWN' });
         await persistTwinMindCases();
       }
