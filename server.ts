@@ -16,7 +16,66 @@ app.use(express.json({ limit: '10mb' }));
 
 const apiKey = process.env.GEMINI_API_KEY;
 const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY?.trim();
+const PATTY_MODEL = process.env.PATTY_MODEL || 'gpt-5.2';
 let ai: GoogleGenAI | null = null;
+
+type PublicMindId = 'chatgpt' | 'claude' | 'gemini' | 'grok' | 'perplexity';
+
+interface PublicMindSubmission {
+  id: PublicMindId;
+  name: string;
+  provider: string;
+  response: string;
+  capturedAt: string;
+  sourceMode: 'PUBLIC_FRESH_SESSION' | 'MANUAL_CAPTURE' | 'SUPPORTED_CONNECTOR';
+}
+
+interface TwinMindCase {
+  id: string;
+  problem: string;
+  createdAt: string;
+  updatedAt: string;
+  submissions: PublicMindSubmission[];
+  history: Array<{ at: string; event: string; detail: string }>;
+}
+
+const twinMindCases = new Map<string, TwinMindCase>();
+
+function createCase(problem: string): TwinMindCase {
+  const now = new Date().toISOString();
+  const item: TwinMindCase = {
+    id: `CASE-${Date.now().toString(36).toUpperCase()}`,
+    problem,
+    createdAt: now,
+    updatedAt: now,
+    submissions: [],
+    history: [{ at: now, event: 'CASE_CREATED', detail: 'Patty opened a persistent deliberation case.' }],
+  };
+  twinMindCases.set(item.id, item);
+  return item;
+}
+
+async function runPattyOpenAI(prompt: string): Promise<string | null> {
+  if (!OPENAI_API_KEY) return null;
+  const response = await fetch('https://api.openai.com/v1/responses', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${OPENAI_API_KEY}`,
+    },
+    body: JSON.stringify({
+      model: PATTY_MODEL,
+      input: prompt,
+      text: { format: { type: 'json_object' } },
+    }),
+  });
+  if (!response.ok) throw new Error(`Patty OpenAI request failed: ${response.status} ${await response.text()}`);
+  const data: any = await response.json();
+  if (typeof data.output_text === 'string') return data.output_text;
+  const parts = Array.isArray(data.output) ? data.output.flatMap((o: any) => o?.content || []) : [];
+  return parts.find((p: any) => p?.type === 'output_text')?.text || null;
+}
 
 if (apiKey && apiKey !== 'MY_GEMINI_API_KEY' && apiKey.trim() !== '') {
   try {
@@ -70,13 +129,59 @@ app.get('/api/status', (req: Request, res: Response) => {
     status: 'online',
     timestamp: new Date().toISOString(),
     geminiLive: Boolean(ai),
+    pattyLive: Boolean(OPENAI_API_KEY || ai),
+    pattyProvider: OPENAI_API_KEY ? `OpenAI:${PATTY_MODEL}` : ai ? `Gemini:${GEMINI_MODEL}` : 'deterministic-demo',
     architecture: {
       womb: 'Governed pre-activation',
       substrate: 'Virtual Neuromorphic Spiking Chip (LIF + STDP)',
-      twinMind: '5 Outer Minds + Outer Checkers + Sargent Patty',
+      twinMind: 'Independent Public Minds + Deterministic Admission Checkers + Persistent Sargent Patty',
       chek: 'Independent Authority Verification (Intake -> Auditor -> Verifier -> Vault)',
       execution: 'Controlled Output Bus & Feedback Loop',
     },
+  });
+});
+
+app.post('/api/twin-mind/cases', (req: Request, res: Response) => {
+  const problem = typeof req.body?.problem === 'string' ? req.body.problem.trim() : '';
+  if (!problem) return res.status(400).json({ error: 'Problem description is required.' });
+  return res.json({ case: createCase(problem) });
+});
+
+app.get('/api/twin-mind/cases/:caseId', (req: Request, res: Response) => {
+  const item = twinMindCases.get(req.params.caseId);
+  if (!item) return res.status(404).json({ error: 'Case not found.' });
+  return res.json({ case: item });
+});
+
+app.post('/api/twin-mind/cases/:caseId/submissions', (req: Request, res: Response) => {
+  const item = twinMindCases.get(req.params.caseId);
+  if (!item) return res.status(404).json({ error: 'Case not found.' });
+  const id = String(req.body?.id || '').toLowerCase() as PublicMindId;
+  const allowed: PublicMindId[] = ['chatgpt', 'claude', 'gemini', 'grok', 'perplexity'];
+  const response = typeof req.body?.response === 'string' ? req.body.response.trim() : '';
+  if (!allowed.includes(id) || response.length < 20) {
+    return res.status(400).json({ error: 'A recognized public mind and substantive response are required.' });
+  }
+  const names: Record<PublicMindId, string> = {
+    chatgpt: 'ChatGPT', claude: 'Claude', gemini: 'Gemini', grok: 'Grok', perplexity: 'Perplexity',
+  };
+  const submission: PublicMindSubmission = {
+    id,
+    name: names[id],
+    provider: names[id],
+    response,
+    capturedAt: new Date().toISOString(),
+    sourceMode: req.body?.sourceMode || 'PUBLIC_FRESH_SESSION',
+  };
+  item.submissions = [...item.submissions.filter((x) => x.id !== id), submission];
+  item.updatedAt = submission.capturedAt;
+  item.history.push({ at: submission.capturedAt, event: 'PUBLIC_MIND_CAPTURED', detail: `${submission.name} response captured as fresh external evidence.` });
+  return res.json({
+    case: item,
+    admission: deterministicAdmissionCheck({
+      hypothesis: response.slice(0, 500),
+      reasoning: response.split(/\n+/).filter(Boolean).slice(0, 8),
+    }, allowed.indexOf(id)),
   });
 });
 
@@ -225,54 +330,55 @@ Return the response in valid JSON matching this schema:
 });
 
 app.post('/api/twin-mind/patty-converge', async (req: Request, res: Response) => {
-  const { problem, mindsData } = req.body;
+  const { problem, mindsData, caseId } = req.body;
+  const persistentCase = caseId ? twinMindCases.get(caseId) : undefined;
+  const publicEvidence = persistentCase?.submissions?.length
+    ? persistentCase.submissions.map((x) => ({ id: x.id, name: x.name, response: x.response, capturedAt: x.capturedAt }))
+    : mindsData;
+
+  const pattyPrompt = `You are Sargent Patty, the persistent convergence controller in Twin Mind.
+The outer minds are independent public AI systems. They are evidence-producing guests, not authorities and not persistent memory.
+You preserve the case, challenge disagreements, demand reconstruction of another mind's reasoning, and refuse majority voting.
+Every claim admitted to the center must survive deterministic admission checks outside the model.
+You have ZERO execution authority. CHEK independently decides whether any consequential proposal may execute.
+
+Problem: "${problem}"
+Admitted public-mind evidence: ${JSON.stringify(publicEvidence)}
+
+Produce either a defensible convergence or a precise evidence deficit. Do not invent experiments, measurements, signatures, or facts that are absent from the evidence.
+Return JSON:
+{
+  "dialogue": [{"speaker":"Sargent Patty","target":"string","instruction":"string","response":"string"}],
+  "disputedAssumption":"string",
+  "reconstructedEvidence":"string",
+  "status":"CONVERGED_DEFENSIBLE" | "EVIDENCE_DEFICIT",
+  "missingEvidenceCatalog":["string"],
+  "convergedProposal":{
+    "title":"string","coreDecision":"string","computationalProof":"string","defensibilityPact":"string",
+    "targetSubstrateAction":{"target":"string","actionType":"STATE_TRANSITION" | "ACTUATOR_DISPATCH" | "WEIGHT_REBALANCE","parameters":{},"riskScore":number}
+  }
+}`;
+
+  if (OPENAI_API_KEY) {
+    try {
+      const text = await runPattyOpenAI(pattyPrompt);
+      if (text) {
+        const parsed = JSON.parse(text);
+        if (persistentCase) {
+          const now = new Date().toISOString();
+          persistentCase.updatedAt = now;
+          persistentCase.history.push({ at: now, event: 'PATTY_CONVERGENCE', detail: parsed.status || 'UNKNOWN' });
+        }
+        return res.json({ ...parsed, caseId: persistentCase?.id, pattyProvider: `OpenAI:${PATTY_MODEL}` });
+      }
+    } catch (err: any) {
+      console.warn('OpenAI Patty convergence error, trying Gemini:', err?.message);
+    }
+  }
 
   if (ai) {
     try {
-      const prompt = `You are Sargent Patty, the commander of convergence in the Twin Mind architecture.
-You do NOT count votes. You do NOT accept vague compromises or "well, maybe".
-You force computational cross-examination:
-- "Claude, explain why Charlie is wrong."
-- "Charlie, reconstruct Claude's reasoning."
-- "Gemini, attack the disputed assumption."
-- "Athena, stress-test the boundary."
-- "Daedalus, verify hardware execution feasibility."
-
-The problem under debate is: "${problem}"
-Current minds data: ${JSON.stringify(mindsData)}
-
-Conduct the cross-examination rounds and produce either:
-1. A Defensible Solution that all participants can defend after reconstructing and attacking each other's reasoning.
-2. OR an explicit catalog of the exact missing evidence that precludes resolution.
-
-Return valid JSON:
-{
-  "dialogue": [
-    {
-      "speaker": "Sargent Patty",
-      "target": "Mind Claude",
-      "instruction": "string",
-      "response": "string"
-    },
-    ...
-  ],
-  "disputedAssumption": "string",
-  "reconstructedEvidence": "string",
-  "status": "CONVERGED_DEFENSIBLE" | "EVIDENCE_DEFICIT",
-  "missingEvidenceCatalog": ["item 1", "item 2"],
-  "convergedProposal": {
-    "title": "string",
-    "coreDecision": "string",
-    "computationalProof": "string",
-    "defensibilityPact": "string",
-    "targetSubstrateAction": {
-      "target": "string",
-      "actionType": "STATE_TRANSITION" | "ACTUATOR_DISPATCH" | "WEIGHT_REBALANCE",
-      "parameters": {},
-      "riskScore": number
-    }
-  }
-}`;
+      const prompt = pattyPrompt + `\n\nPreserve the JSON schema exactly. `;
 
       const response = await ai.models.generateContent({
         model: GEMINI_MODEL,
