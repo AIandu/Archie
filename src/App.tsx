@@ -226,7 +226,7 @@ export default function App() {
   };
 
   // Run Sargent Patty Convergence via backend API or fallback
-  const handleRunPattyConvergence = async () => {
+  const handleRunPattyConvergence = async (caseId?: string) => {
     setIsDeliberating(true);
     try {
       const res = await fetch('/api/twin-mind/patty-converge', {
@@ -235,6 +235,7 @@ export default function App() {
         body: JSON.stringify({
           problem: currentScenario.problemStatement,
           mindsData: minds,
+          caseId,
         }),
       });
 
