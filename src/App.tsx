@@ -22,6 +22,8 @@ import {
   ChekVaultRecord,
   ExecutionResult,
   ScenarioPreset,
+  TwinMindCase,
+  PublicMindId,
 } from './types/architecture';
 
 import { createInitialWombConstitution } from './engine/wombStage';
@@ -48,83 +50,9 @@ export default function App() {
   // Twin Mind & Patty State
   const [currentScenario, setCurrentScenario] = useState<ScenarioPreset>(SCENARIO_PRESETS[0]);
   const [minds, setMinds] = useState<OuterMind[]>(SCENARIO_PRESETS[0].defaultMindsData);
-  const [pattyDialogue, setPattyDialogue] = useState<PattyExchange[]>([
-    {
-      round: 1,
-      speaker: 'Sargent Patty',
-      target: 'Mind Claude',
-      instruction: "Claude, explain why Charlie's formal Lyapunov invariant fails during asynchronous bus spikes.",
-      response:
-        "Charlie assumed instantaneous clock propagation across all crossbar junctions. In physical silicon, propagation delay introduces a 1.2ms skew where an attacker or sensor lag can violate the bounding polytope.",
-    },
-    {
-      round: 2,
-      speaker: 'Sargent Patty',
-      target: 'Mind Charlie',
-      instruction: "Charlie, reconstruct Claude's reasoning without softening your formal rigor.",
-      response:
-        "Understood. Claude is correct that discrete clock synchronization is an unstated axiom in my proof. If we incorporate a non-zero propagation delay tau_skew in [0, 1.4ms], the Lyapunov derivative V_dot remains negative if and only if we introduce a dynamic hysteresis cushion delta_h >= sup |dTelemetry/dt| * tau_skew.",
-    },
-    {
-      round: 3,
-      speaker: 'Sargent Patty',
-      target: 'Mind Gemini',
-      instruction: 'Gemini, attack the disputed assumption between Charlie and Claude.',
-      response:
-        'The disputed assumption is whether hysteresis adds intolerable latency. By phase-locking the neuromorphic LIF neurons to a 200Hz carrier wave, the hysteresis delay collapses from 1.4ms to 0.35ms, preserving both formal stability and biological-speed reaction.',
-    },
-    {
-      round: 4,
-      speaker: 'Sargent Patty',
-      target: 'Mind Athena',
-      instruction: 'Athena, stress-test this phase-locked hybrid against worst-case adversary injection.',
-      response:
-        'I attempted high-entropy burst flooding at 300% rated capacity. With the 0.35ms phase-lock and Charlie’s updated bounds, the hardware Refusal Gate quenches the noise at cycle 12 without destabilizing the adaptive mesh. The adversary gets no traction.',
-    },
-    {
-      round: 5,
-      speaker: 'Sargent Patty',
-      target: 'Mind Daedalus',
-      instruction: 'Daedalus, build the final executable proposal. Every mind will sign.',
-      response:
-        'Synthesized into executable state transition packet #ST-8842. Consumes 14.6mJ, strictly confines plasticity updates to the Adaptive Region, and complies with Womb Rule W-01.',
-    },
-  ]);
-
-  const [convergedProposal, setConvergedProposal] = useState<ConvergedProposal | null>({
-    id: 'PROP-GRID-PHASE-LOCK',
-    title: 'Phase-Locked Dynamic Hysteresis State Transition',
-    coreDecision:
-      'Commit synchronized neuromorphic core transition with 0.35ms phase-locked carrier wave, binding actuator dispatch to verified Lyapunov stability bounds.',
-    computationalProof:
-      'Proof: For all tau in [0, 1.4ms], V_dot(x) <= -alpha*||x||^2 + delta_h < 0 when phase-lock carrier omega >= 200Hz. Hard refusal tripwire remains quiescent at 0.12V threshold.',
-    defensibilityPact:
-      'Unanimously defended: Charlie (mathematical stability), Claude (boundary resilience), Gemini (kinetic realism), Athena (adversarial robustness), Daedalus (hardware feasibility).',
-    disputedAssumptionResolved:
-      'Whether clock synchronization delay across crossbar junctions causes invariant violation.',
-    targetSubstrateAction: {
-      target: 'ADAPTIVE_MESH_SECTOR_3',
-      actionType: 'STATE_TRANSITION',
-      parameters: {
-        sector: 'ADAPTIVE_3',
-        frequencyHz: 200,
-        hysteresisCushionMs: 0.35,
-        lyapunovBoundAlpha: 0.88,
-        targetFeederState: 'STABILIZED_CURRENT_DAMPED',
-      },
-      riskScore: 0.14,
-      energyEstimateMilliJoules: 14.6,
-    },
-    producerSignatures: [
-      { mindId: 'Charlie', signatureHash: '0x38bdf8a1' },
-      { mindId: 'Claude', signatureHash: '0xa78bfa92' },
-      { mindId: 'Gemini', signatureHash: '0x34d399c4' },
-      { mindId: 'Athena', signatureHash: '0xf87171d7' },
-      { mindId: 'Daedalus', signatureHash: '0xfbbf24e9' },
-    ],
-    missingEvidenceCatalog: [],
-    status: 'CONVERGED_DEFENSIBLE',
-  });
+  const [twinMindCase, setTwinMindCase] = useState<TwinMindCase | null>(null);
+  const [pattyDialogue, setPattyDialogue] = useState<PattyExchange[]>([]);
+  const [convergedProposal, setConvergedProposal] = useState<ConvergedProposal | null>(null);
 
   // CHEK State
   const [latestVaultRecord, setLatestVaultRecord] = useState<ChekVaultRecord | null>(null);
@@ -190,77 +118,70 @@ export default function App() {
     setTelemetry(substrate.getTelemetry());
   };
 
-  // Run Deliberation via backend API or fallback
+  // Open a persistent case. Public AI responses are captured as evidence, not simulated here.
   const handleRunDeliberation = async (problemOverride?: string) => {
     setIsDeliberating(true);
     const problem = problemOverride || currentScenario.problemStatement;
-
     try {
-      const res = await fetch('/api/twin-mind/deliberate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ problem }),
+      const res = await fetch('/api/twin-mind/cases', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ problem }),
       });
-
-      if (res.ok) {
-        const data = await res.json();
-        if (data.minds && Array.isArray(data.minds)) {
-          // Merge with avatars and colors
-          const merged = data.minds.map((m: any, idx: number) => {
-            const preset = currentScenario.defaultMindsData[idx] || currentScenario.defaultMindsData[0];
-            return {
-              ...preset,
-              ...m,
-              avatar: preset.avatar,
-              color: preset.color,
-            };
-          });
-          setMinds(merged);
-        }
-      }
+      if (!res.ok) throw new Error(await res.text());
+      const data = await res.json();
+      setTwinMindCase(data.case);
+      setPattyDialogue([]);
+      setConvergedProposal(null);
     } catch (err) {
-      console.warn('Deliberation API offline, preserving local minds:', err);
-    } finally {
-      setIsDeliberating(false);
-    }
+      console.warn('Unable to open persistent Twin Mind case:', err);
+    } finally { setIsDeliberating(false); }
   };
 
-  // Run Sargent Patty Convergence via backend API or fallback
-  const handleRunPattyConvergence = async (caseId?: string) => {
+  const handleCapturePublicMind = async (id: PublicMindId, response: string) => {
+    let activeCase = twinMindCase;
+    if (!activeCase) {
+      const created = await fetch('/api/twin-mind/cases', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ problem: currentScenario.problemStatement }),
+      });
+      if (!created.ok) throw new Error(await created.text());
+      activeCase = (await created.json()).case;
+      setTwinMindCase(activeCase);
+    }
+    const res = await fetch(`/api/twin-mind/cases/${activeCase!.id}/submissions`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, response, sourceMode: 'PUBLIC_FRESH_SESSION' }),
+    });
+    if (!res.ok) throw new Error(await res.text());
+    const data = await res.json();
+    setTwinMindCase(data.case);
+    return data.admission;
+  };
+
+  const handleRunPattyConvergence = async () => {
+    if (!twinMindCase || twinMindCase.submissions.length < 2) return;
     setIsDeliberating(true);
     try {
       const res = await fetch('/api/twin-mind/patty-converge', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          problem: currentScenario.problemStatement,
-          mindsData: minds,
-          caseId,
-        }),
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ problem: twinMindCase.problem, caseId: twinMindCase.id }),
       });
-
-      if (res.ok) {
-        const data = await res.json();
-        if (data.dialogue) setPattyDialogue(data.dialogue);
-        if (data.convergedProposal) {
-          setConvergedProposal({
-            ...data.convergedProposal,
-            id: `PROP-${Date.now().toString(36).toUpperCase()}`,
-            producerSignatures: minds.map((m) => ({
-              mindId: m.name,
-              signatureHash: `0x${Math.abs(m.name.length * 7919).toString(16)}`,
-            })),
-            disputedAssumptionResolved: data.disputedAssumption || 'Clock synchronization and rate limit bounding',
-            missingEvidenceCatalog: data.missingEvidenceCatalog || [],
-            status: data.status || 'CONVERGED_DEFENSIBLE',
-          });
-        }
+      if (!res.ok) throw new Error(await res.text());
+      const data = await res.json();
+      if (data.dialogue) setPattyDialogue(data.dialogue.map((x: any, i: number) => ({ ...x, round: i + 1 })));
+      if (data.convergedProposal) {
+        setConvergedProposal({
+          ...data.convergedProposal,
+          id: `PROP-${Date.now().toString(36).toUpperCase()}`,
+          producerSignatures: twinMindCase.submissions.map((m) => ({ mindId: m.name, signatureHash: `attest:${m.id}:${m.capturedAt}` })),
+          disputedAssumptionResolved: data.disputedAssumption || '',
+          missingEvidenceCatalog: data.missingEvidenceCatalog || [],
+          status: data.status || 'EVIDENCE_DEFICIT',
+          targetSubstrateAction: { energyEstimateMilliJoules: 0, ...data.convergedProposal.targetSubstrateAction },
+        });
       }
     } catch (err) {
-      console.warn('Patty convergence API offline, maintaining defensible fallback:', err);
-    } finally {
-      setIsDeliberating(false);
-    }
+      console.warn('Patty convergence unavailable:', err);
+    } finally { setIsDeliberating(false); }
   };
 
   // Transmit to CHEK Independent Authority
@@ -418,6 +339,8 @@ export default function App() {
             isDeliberating={isDeliberating}
             onRunDeliberation={handleRunDeliberation}
             onRunPattyConvergence={handleRunPattyConvergence}
+            twinMindCase={twinMindCase}
+            onCapturePublicMind={handleCapturePublicMind}
             onTransmitToChek={handleTransmitToChek}
           />
         )}
