@@ -9,6 +9,7 @@ import { PipelineStepper, StageId } from './components/PipelineStepper';
 import { WombStageComponent } from './components/WombStageComponent';
 import { NeuromorphicSubstrateComponent } from './components/NeuromorphicSubstrateComponent';
 import { TwinMindArenaComponent } from './components/TwinMindArenaComponent';
+import { GovernorTerminalComponent } from './components/GovernorTerminalComponent';
 import { ChekTerminalComponent } from './components/ChekTerminalComponent';
 import { ExecutionFeedbackComponent } from './components/ExecutionFeedbackComponent';
 import { HardwareSpecComponent } from './components/HardwareSpecComponent';
@@ -19,7 +20,8 @@ import {
   OuterMind,
   PattyExchange,
   ConvergedProposal,
-  ChekVaultRecord,
+  GovernorVaultRecord,
+  ChekVerificationRecord,
   ExecutionResult,
   ScenarioPreset,
   TwinMindCase,
@@ -28,12 +30,14 @@ import {
 
 import { createInitialWombConstitution } from './engine/wombStage';
 import { NeuromorphicSubstrate } from './engine/neuromorphicSubstrate';
+import { GovernorPolicyEngine } from './engine/governorEngine';
 import { ChekVerificationEngine } from './engine/chekEngine';
 import { SCENARIO_PRESETS } from './engine/scenarioPresets';
 
 export default function App() {
   // Core Engines
   const substrate = useMemo(() => new NeuromorphicSubstrate(), []);
+  const governorEngine = useMemo(() => new GovernorPolicyEngine(), []);
   const chekEngine = useMemo(() => new ChekVerificationEngine(), []);
 
   // Application State
@@ -57,7 +61,8 @@ export default function App() {
   const [convergedProposal, setConvergedProposal] = useState<ConvergedProposal | null>(null);
 
   // CHEK State
-  const [latestVaultRecord, setLatestVaultRecord] = useState<ChekVaultRecord | null>(null);
+  const [latestVaultRecord, setLatestVaultRecord] = useState<GovernorVaultRecord | null>(null);
+  const [latestChekRecord, setLatestChekRecord] = useState<ChekVerificationRecord | null>(null);
 
   // Execution State
   const [executionResult, setExecutionResult] = useState<ExecutionResult | null>(null);
@@ -284,7 +289,7 @@ export default function App() {
   };
 
   // Dispatch Controlled Execution & STDP Feedback
-  const handleDispatchExecution = (recordOverride?: ChekVaultRecord | null) => {
+  const handleDispatchExecution = (recordOverride?: GovernorVaultRecord | null) => {
     const record = recordOverride || latestVaultRecord;
     if (!record || record.outcome !== 'AUTHORIZED') return;
     setIsExecuting(true);
@@ -353,9 +358,9 @@ export default function App() {
     // Step 5: Governor authorization
     setActiveStage('governor');
     setCycleActiveStep(5);
-    let recordForExecution: ChekVaultRecord | null = null;
+    let recordForExecution: GovernorVaultRecord | null = null;
     if (convergedProposal && convergedProposal.status === 'CONVERGED_DEFENSIBLE') {
-      const evaluation = await chekEngine.evaluateProposal(convergedProposal);
+      const evaluation = await governorEngine.evaluateProposal(convergedProposal);
       recordForExecution = evaluation.vaultRecord;
       setLatestVaultRecord(recordForExecution);
     }
@@ -449,12 +454,12 @@ export default function App() {
         )}
 
         {activeStage === 'governor' && (
-          <ChekTerminalComponent
-            mode="governor"
-            chekEngine={chekEngine}
+          <GovernorTerminalComponent
+            governorEngine={governorEngine}
             currentProposal={convergedProposal}
             onAdvanceToExecution={(record) => {
               setLatestVaultRecord(record);
+              setLatestChekRecord(null);
               setActiveStage('chek');
             }}
           />
@@ -462,11 +467,14 @@ export default function App() {
 
         {activeStage === 'chek' && (
           <ChekTerminalComponent
-            mode="chek"
             chekEngine={chekEngine}
+            governorEngine={governorEngine}
+            substrate={substrate}
             currentProposal={convergedProposal}
-            onAdvanceToExecution={(record) => {
-              setLatestVaultRecord(record);
+            governorRecord={latestVaultRecord}
+            twinMindCase={twinMindCase}
+            onVerified={(record) => {
+              setLatestChekRecord(record);
               setActiveStage('execution');
             }}
           />
@@ -476,6 +484,7 @@ export default function App() {
           <ExecutionFeedbackComponent
             proposal={convergedProposal}
             vaultRecord={latestVaultRecord}
+            chekRecord={latestChekRecord}
             substrate={substrate}
             onDispatchExecution={handleDispatchExecution}
             executionResult={executionResult}
