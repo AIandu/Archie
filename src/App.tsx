@@ -51,6 +51,7 @@ export default function App() {
   const [currentScenario, setCurrentScenario] = useState<ScenarioPreset>(SCENARIO_PRESETS[0]);
   const [minds, setMinds] = useState<OuterMind[]>(SCENARIO_PRESETS[0].defaultMindsData);
   const [twinMindCase, setTwinMindCase] = useState<TwinMindCase | null>(null);
+  const [caseHistory, setCaseHistory] = useState<Array<{ id: string; problem: string; createdAt: string; updatedAt: string; submissionCount: number; challengeCount: number; lastStatus: string | null }>>([]);
   const [pattyDialogue, setPattyDialogue] = useState<PattyExchange[]>([]);
   const [pattyConversation, setPattyConversation] = useState<{ at: string; role: 'USER' | 'PATTY'; text: string }[]>([]);
   const [convergedProposal, setConvergedProposal] = useState<ConvergedProposal | null>(null);
@@ -65,6 +66,65 @@ export default function App() {
 
   // Substrate Clock Ticking Loop
   const timerRef = useRef<NodeJS.Timeout | null>(null);
+
+  const applyPersistentCase = (item: TwinMindCase) => {
+    setTwinMindCase(item);
+    localStorage.setItem('archie.activeCaseId', item.id);
+    setPattyConversation((item.pattyConversation || []).map(({ at, role, text }) => ({ at, role, text })));
+
+    const saved = item.lastConvergence;
+    if (saved) {
+      setPattyDialogue((saved.dialogue || []).map((x: any, i: number) => ({ ...x, round: i + 1 })));
+      if (saved.convergedProposal) {
+        setConvergedProposal({
+          ...(saved.convergedProposal as any),
+          id: `PROP-${saved.at.replace(/[^0-9A-Z]/gi, '').slice(-12).toUpperCase()}`,
+          producerSignatures: [...new Map(item.submissions.map((m) => [m.id, m])).values()].map((m) => ({
+            mindId: m.name,
+            signatureHash: `evidence:${m.evidenceHash || m.id}`,
+          })),
+          evidenceLineage: {
+            caseId: item.id,
+            evidenceHashes: item.submissions.map((m) => m.evidenceHash).filter(Boolean),
+          },
+          disputedAssumptionResolved: saved.disputedAssumption || '',
+          missingEvidenceCatalog: saved.missingEvidenceCatalog || [],
+          status: saved.status,
+          targetSubstrateAction: {
+            energyEstimateMilliJoules: 0,
+            ...(saved.convergedProposal as any).targetSubstrateAction,
+          },
+        });
+      }
+    } else {
+      setPattyDialogue([]);
+      setConvergedProposal(null);
+    }
+  };
+
+  const refreshCaseHistory = async () => {
+    try {
+      const res = await fetch('/api/twin-mind/cases');
+      if (!res.ok) return;
+      const data = await res.json();
+      setCaseHistory(Array.isArray(data.cases) ? data.cases : []);
+    } catch {}
+  };
+
+  const handleLoadCase = async (caseId: string) => {
+    const res = await fetch(`/api/twin-mind/cases/${caseId}`);
+    if (!res.ok) throw new Error(await res.text());
+    const data = await res.json();
+    applyPersistentCase(data.case);
+  };
+
+  useEffect(() => {
+    refreshCaseHistory();
+    const priorCaseId = localStorage.getItem('archie.activeCaseId');
+    if (priorCaseId) {
+      handleLoadCase(priorCaseId).catch(() => localStorage.removeItem('archie.activeCaseId'));
+    }
+  }, []);
 
   useEffect(() => {
     if (isAutoRunning) {
@@ -132,9 +192,10 @@ export default function App() {
       });
       if (!res.ok) throw new Error(await res.text());
       const data = await res.json();
-      setTwinMindCase(data.case);
+      applyPersistentCase(data.case);
       setPattyDialogue([]);
       setConvergedProposal(null);
+      await refreshCaseHistory();
     } catch (err) {
       console.warn('Unable to open persistent Twin Mind case:', err);
     } finally { setIsDeliberating(false); }
@@ -149,7 +210,8 @@ export default function App() {
       });
       if (!created.ok) throw new Error(await created.text());
       activeCase = (await created.json()).case;
-      setTwinMindCase(activeCase);
+      applyPersistentCase(activeCase);
+      await refreshCaseHistory();
     }
     const res = await fetch(`/api/twin-mind/cases/${activeCase!.id}/submissions`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -157,7 +219,8 @@ export default function App() {
     });
     if (!res.ok) throw new Error(await res.text());
     const data = await res.json();
-    setTwinMindCase(data.case);
+    applyPersistentCase(data.case);
+    await refreshCaseHistory();
     return data.admission;
   };
 
@@ -173,8 +236,9 @@ export default function App() {
       throw new Error(await res.text());
     }
     const data = await res.json();
-    setTwinMindCase(data.case);
+    applyPersistentCase(data.case);
     setPattyConversation(data.case?.pattyConversation || [...optimistic, { at: new Date().toISOString(), role: 'PATTY', text: data.reply }]);
+    await refreshCaseHistory();
     return data.reply;
   };
 
@@ -203,6 +267,10 @@ export default function App() {
           status: data.status || 'EVIDENCE_DEFICIT',
           targetSubstrateAction: { energyEstimateMilliJoules: 0, ...data.convergedProposal.targetSubstrateAction },
         });
+      }
+      if (twinMindCase) {
+        await handleLoadCase(twinMindCase.id);
+        await refreshCaseHistory();
       }
     } catch (err) {
       console.warn('Patty convergence unavailable:', err);
@@ -370,6 +438,8 @@ export default function App() {
             onTalkToPatty={handleTalkToPatty}
             onOpenCase={async () => { await handleRunDeliberation(); }}
             pattyConversation={pattyConversation}
+            caseHistory={caseHistory}
+            onLoadCase={handleLoadCase}
           />
         )}
 
