@@ -12,7 +12,7 @@ export function buildMindLaunchUrl(baseUrl: string, launch: MacroLaunch): string
     archie_mind: launch.mindId,
     archie_origin: launch.bridgeOrigin,
   });
-  return `${baseUrl}${baseUrl.includes('?') ? '&' : '?'}archie_launch=1#${hash.toString()}`;
+  return `${baseUrl}${baseUrl.includes('#') ? '&' : '#'}${hash.toString()}`;
 }
 
 export function buildMacroBookmarklet(): string {
