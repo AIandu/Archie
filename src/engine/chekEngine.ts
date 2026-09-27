@@ -59,7 +59,7 @@ export class ChekVerificationEngine {
       previousRecordHash: ZERO_HASH,
       recordHash: ZERO_HASH,
       outcome: 'AUTHORIZED',
-      reason: 'Software reference genesis root. Runtime authorizations require independent CHEK verification.',
+      reason: 'Software reference genesis root. Runtime authorizations require deterministic Governor policy approval and remain independently auditable by CHEK.',
       evaluatedInvariants: [],
       producerCannotApproveVerification: true,
     };
@@ -67,20 +67,20 @@ export class ChekVerificationEngine {
   }
 
   private async signAuthorization(recordHash: string, proposalHash: string): Promise<string> {
-    const payload = canonicalize({ v: 1, recordHash, proposalHash, authority: 'CHEK', purpose: 'EXECUTION_AUTH' });
+    const payload = canonicalize({ v: 1, recordHash, proposalHash, authority: 'GOVERNOR', purpose: 'EXECUTION_AUTH' });
     const key = await this.getAuthorityKey();
     const mac = await hmacHex(key, payload);
-    return `CHEK1.${toB64Url(payload)}.${mac}`;
+    return `GOV1.${toB64Url(payload)}.${mac}`;
   }
 
   public async verifyAuthorization(record: ChekVaultRecord): Promise<boolean> {
     if (record.outcome !== 'AUTHORIZED' || !record.signedCertificate) return false;
     const [prefix, payload64, mac] = record.signedCertificate.split('.');
-    if (prefix !== 'CHEK1' || !payload64 || !mac) return false;
+    if (prefix !== 'GOV1' || !payload64 || !mac) return false;
     try {
       const payload = fromB64Url(payload64);
       const parsed = JSON.parse(payload);
-      if (parsed.recordHash !== record.recordHash || parsed.proposalHash !== record.proposalHash || parsed.authority !== 'CHEK') return false;
+      if (parsed.recordHash !== record.recordHash || parsed.proposalHash !== record.proposalHash || parsed.authority !== 'GOVERNOR') return false;
       const key = await this.getAuthorityKey();
       return globalThis.crypto.subtle.verify('HMAC', key, Uint8Array.from(mac.match(/.{2}/g)!.map((x: string) => parseInt(x, 16))), enc.encode(payload));
     } catch {
@@ -149,7 +149,7 @@ export class ChekVerificationEngine {
       ['inv-6','W-02','Evidence Lineage','CASE_ID_PRESENT && EVIDENCE_HASHES >= 2 && SHA256_FORMAT_VALID', validCaseLineage, validCaseLineage ? `${evidenceHashes.length}_HASHES` : 'LINEAGE_INVALID'],
     ] as const;
     for (const [id, ruleCode, name, formula, passed, computedValue] of checks) {
-      invariants.push({ id, ruleCode, name, formula, expectedCondition: 'PASS', computedValue, passed, independentRecomputedBy: 'CHEK_DETERMINISTIC_POLICY_ENGINE' });
+      invariants.push({ id, ruleCode, name, formula, expectedCondition: 'PASS', computedValue, passed, independentRecomputedBy: 'GOVERNOR_DETERMINISTIC_POLICY_ENGINE' });
     }
 
     const allPassed = invariants.every(i => i.passed) && stages[0].status === 'PASSED' && stages[1].status === 'PASSED';
