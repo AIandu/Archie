@@ -55,6 +55,7 @@ interface TwinMindCase {
   submissions: PublicMindSubmission[];
   challenges: PattyChallenge[];
   history: Array<{ at: string; event: string; detail: string }>;
+  pattyConversation: Array<{ at: string; role: 'USER' | 'PATTY'; text: string }>;
 }
 
 const twinMindCases = new Map<string, TwinMindCase>();
@@ -78,6 +79,7 @@ async function loadTwinMindCases() {
     if (Array.isArray(rows)) for (const item of rows) if (item?.id) {
       item.submissions = Array.isArray(item.submissions) ? item.submissions : [];
       item.challenges = Array.isArray(item.challenges) ? item.challenges : [];
+      item.pattyConversation = Array.isArray(item.pattyConversation) ? item.pattyConversation : [];
       twinMindCases.set(item.id, item);
     }
   } catch (err: any) {
@@ -104,6 +106,7 @@ function createCase(problem: string): TwinMindCase {
     updatedAt: now,
     submissions: [],
     challenges: [],
+    pattyConversation: [],
     history: [{ at: now, event: 'CASE_CREATED', detail: 'Patty opened a persistent deliberation case.' }],
   };
   twinMindCases.set(item.id, item);
@@ -247,6 +250,37 @@ app.post('/api/twin-mind/cases/:caseId/submissions', async (req: Request, res: R
   item.history.push({ at: capturedAt, event: 'PUBLIC_MIND_ADMITTED', detail: `${submission.name} response admitted as fresh external evidence.` });
   await persistTwinMindCases();
   return res.json({ case: item, admission });
+});
+
+app.post('/api/twin-mind/cases/:caseId/patty-chat', async (req: Request, res: Response) => {
+  const item = twinMindCases.get(req.params.caseId);
+  if (!item) return res.status(404).json({ error: 'Case not found.' });
+  const message = typeof req.body?.message === 'string' ? req.body.message.trim() : '';
+  if (!message) return res.status(400).json({ error: 'Message is required.' });
+  item.pattyConversation ||= [];
+  item.pattyConversation.push({ at: new Date().toISOString(), role: 'USER', text: message });
+  const evidence = item.submissions.map((x) => ({ mind: x.name, evidenceHash: x.evidenceHash, response: x.response, revision: x.revision }));
+  const prompt = 'You are Sargent Patty, the human-facing convergence controller inside Archie Twin Mind. Answer the operator directly from the persistent case record. Be concise. Distinguish admitted evidence from assumptions. Never invent evidence, public-mind replies, measurements, or CHEK approval. Conversation never grants execution authority; CHEK remains independent. Return JSON only with one field named reply. CASE: ' + JSON.stringify({ id: item.id, problem: item.problem, evidence, challenges: item.challenges, recentConversation: item.pattyConversation.slice(-10), operatorMessage: message });
+  let reply = '';
+  try {
+    if (OPENAI_API_KEY) {
+      const raw = await runPattyOpenAI(prompt);
+      if (raw) reply = String(JSON.parse(raw)?.reply || '').trim();
+    }
+    if (!reply && ai) {
+      const response = await ai.models.generateContent({ model: GEMINI_MODEL, contents: prompt, config: { responseMimeType: 'application/json', temperature: 0.3 } });
+      reply = String(JSON.parse(response.text || '{}')?.reply || '').trim();
+    }
+  } catch (err: any) {
+    console.warn('Patty chat error:', err?.message);
+    return res.status(502).json({ error: 'Patty provider failed.' });
+  }
+  if (!reply) return res.status(503).json({ error: 'Patty is offline.' });
+  item.pattyConversation.push({ at: new Date().toISOString(), role: 'PATTY', text: reply });
+  item.updatedAt = new Date().toISOString();
+  item.history.push({ at: item.updatedAt, event: 'PATTY_OPERATOR_EXCHANGE', detail: 'Patty answered the operator from the persistent case record.' });
+  await persistTwinMindCases();
+  return res.json({ reply, case: item });
 });
 
 app.post('/api/twin-mind/patty-converge', async (req: Request, res: Response) => {
