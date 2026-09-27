@@ -127,9 +127,7 @@ export const TwinMindArenaComponent: React.FC<TwinMindArenaComponentProps> = ({
           </h2>
 
           <p className="text-sm text-slate-300 leading-relaxed">
-            Multiple differentiated reasoning roles attack the same problem simultaneously, retaining their different reasoning
-            styles rather than being reduced to assigned little jobs. Each mind's checker kicks back garbage before it
-            reaches the center. Sargent Patty forces computational cross-examination — she doesn't count votes.
+            Fresh public AI minds can attack the same case independently. Archie carries the case, evidence, admission checks, and Patty's convergence state so the guest minds do not need shared memory. The built-in role cards below remain a simulation harness for repeatable demos and fault tests.
           </p>
 
           {/* Scenario Selector */}
@@ -258,7 +256,7 @@ export const TwinMindArenaComponent: React.FC<TwinMindArenaComponentProps> = ({
         <div className="flex items-center justify-between">
           <h3 className="text-xs font-mono font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2">
             <Users className="w-4 h-4 text-purple-400" />
-            Fast Outer Cognitive Edge (5 Reasoning Roles + Checks A-E)
+            Simulation Harness (5 Repeatable Reasoning Roles + Checks A-E)
           </h3>
 
           <button
@@ -267,7 +265,7 @@ export const TwinMindArenaComponent: React.FC<TwinMindArenaComponentProps> = ({
             className="px-3 py-1 rounded bg-slate-800 hover:bg-slate-700 text-purple-300 border border-purple-800/80 text-xs font-mono flex items-center gap-1.5 disabled:opacity-50"
           >
             <RefreshCw className={`w-3 h-3 ${isDeliberating ? 'animate-spin' : ''}`} />
-            <span>{isDeliberating ? 'Thinking...' : 'Re-Run Outer Minds'}</span>
+            <span>{isDeliberating ? 'Thinking...' : 'Run Simulation Harness'}</span>
           </button>
         </div>
 
