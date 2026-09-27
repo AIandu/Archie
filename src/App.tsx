@@ -368,6 +368,7 @@ export default function App() {
             onCapturePublicMind={handleCapturePublicMind}
             onTransmitToChek={handleTransmitToChek}
             onTalkToPatty={handleTalkToPatty}
+            onOpenCase={async () => { await handleRunDeliberation(); }}
             pattyConversation={pattyConversation}
           />
         )}
