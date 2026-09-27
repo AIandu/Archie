@@ -48,7 +48,7 @@ export const Header: React.FC<HeaderProps> = ({
               </h1>
             </div>
             <p className="text-xs text-stone-400 font-mono truncate max-w-[72vw] xl:max-w-none">
-              Womb Governance • Virtual Neuromorphic Silicon • Twin Mind + Patty • CHEK Authority
+              Womb Governance • Virtual Neuromorphic Silicon • Twin Mind + Patty • Governor Authority • CHEK Verification
             </p>
           </div>
         </div>
