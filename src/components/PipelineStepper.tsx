@@ -6,6 +6,7 @@ export type StageId =
   | 'substrate'
   | 'twinmind'
   | 'patty'
+  | 'governor'
   | 'chek'
   | 'execution'
   | 'silicon-spec';
@@ -57,15 +58,22 @@ export const PipelineStepper: React.FC<PipelineStepperProps> = ({
       icon: Award,
     },
     {
-      id: 'chek',
+      id: 'governor',
       stepNumber: 5,
-      label: 'CHEK',
+      label: 'GOVERNOR',
       verb: 'AUTHORIZES',
       icon: Lock,
     },
     {
-      id: 'execution',
+      id: 'chek',
       stepNumber: 6,
+      label: 'CHEK',
+      verb: 'VERIFIES',
+      icon: ShieldAlert,
+    },
+    {
+      id: 'execution',
+      stepNumber: 7,
       label: 'EXECUTION & PLASTICITY',
       verb: 'EXECUTES & LEARNS',
       icon: Play,
