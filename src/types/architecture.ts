@@ -67,12 +67,33 @@ export interface SubstrateTelemetry {
 export type PublicMindId = 'chatgpt' | 'claude' | 'gemini' | 'grok' | 'perplexity';
 
 export interface PublicMindEvidence {
+  evidenceId: string;
+  evidenceHash: string;
   id: PublicMindId;
   name: string;
   provider: string;
   response: string;
   capturedAt: string;
   sourceMode: 'PUBLIC_FRESH_SESSION' | 'MANUAL_CAPTURE' | 'SUPPORTED_CONNECTOR';
+  revision: number;
+  parentEvidenceHash?: string;
+  challengeId?: string;
+  admission: {
+    passed: boolean;
+    checkerId: string;
+    kickedBackClaims: string[];
+    diagnostic: string;
+    verifiedAssumptions: string[];
+  };
+}
+
+export interface PattyChallenge {
+  id: string;
+  target: PublicMindId;
+  instruction: string;
+  createdAt: string;
+  sourceEvidenceHashes: string[];
+  status: 'AWAITING_RESPONSE' | 'ANSWERED';
 }
 
 export interface TwinMindCase {
@@ -81,6 +102,7 @@ export interface TwinMindCase {
   createdAt: string;
   updatedAt: string;
   submissions: PublicMindEvidence[];
+  challenges: PattyChallenge[];
   history: { at: string; event: string; detail: string }[];
 }
 
