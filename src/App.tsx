@@ -86,6 +86,8 @@ export default function App() {
     setCurrentScenario(scenario);
     setMinds(scenario.defaultMindsData);
     setConvergedProposal(null);
+    setTwinMindCase(null);
+    setPattyDialogue([]);
     setLatestVaultRecord(null);
     setExecutionResult(null);
   };
@@ -261,7 +263,7 @@ export default function App() {
     setActiveStage('chek');
     setCycleActiveStep(5);
     let recordForExecution: ChekVaultRecord | null = null;
-    if (convergedProposal) {
+    if (convergedProposal && convergedProposal.status === 'CONVERGED_DEFENSIBLE') {
       const evaluation = await chekEngine.evaluateProposal(convergedProposal);
       recordForExecution = evaluation.vaultRecord;
       setLatestVaultRecord(recordForExecution);
