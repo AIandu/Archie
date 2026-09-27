@@ -190,7 +190,7 @@ export interface InvariantEvaluation {
   independentRecomputedBy: string;
 }
 
-export interface ChekVaultRecord {
+export interface GovernorVaultRecord {
   index: number;
   timestamp: string;
   proposalId: string;
@@ -202,7 +202,23 @@ export interface ChekVaultRecord {
   evaluatedInvariants: InvariantEvaluation[];
   signedCertificate?: string;
   rejectionProof?: string;
-  producerCannotApproveVerification: boolean; // strictly verified
+  producerCannotApproveVerification: boolean;
+}
+
+export type ChekVerificationOutcome = 'VALID' | 'INVALID' | 'INCONSISTENT' | 'UNVERIFIABLE';
+
+export interface ChekVerificationRecord {
+  index: number;
+  timestamp: string;
+  proposalId: string;
+  proposalHash: string;
+  governorRecordHash: string;
+  previousRecordHash: string;
+  recordHash: string;
+  outcome: ChekVerificationOutcome;
+  reason: string;
+  evaluatedInvariants: InvariantEvaluation[];
+  producerCannotApproveVerification: boolean;
 }
 
 export interface ExecutionResult {
