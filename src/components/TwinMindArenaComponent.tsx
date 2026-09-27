@@ -63,7 +63,7 @@ export const TwinMindArenaComponent: React.FC<Props> = ({
     if (!packet) return;
     try { await navigator.clipboard.writeText(packet); } catch {}
     setCaptureMind(mind.id);
-    window.open(mind.url, '_blank', 'noopener,noreferrer');
+    window.open(mind.url, mind.id);
     setStatus(`${mind.label} opened. The identical Archie packet is on your clipboard. Paste, submit, then bring the answer back here.`);
   };
 
@@ -72,7 +72,7 @@ export const TwinMindArenaComponent: React.FC<Props> = ({
     try { await navigator.clipboard.writeText(packet); } catch {}
     let opened = 0;
     for (const mind of PUBLIC_MINDS) {
-      const win = window.open(mind.url, '_blank', 'noopener,noreferrer');
+      const win = window.open(mind.url, mind.id);
       if (win) opened++;
     }
     setStatus(opened === PUBLIC_MINDS.length
