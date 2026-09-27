@@ -80,7 +80,7 @@ export class NeuromorphicSubstrate {
         const isHighway = (preN.x === postN.x || preN.y === postN.y) && Math.random() < 0.25;
 
         if (isLocal || isHighway) {
-          const isProtectedSynapse = preN.region === 'PROTECTED' && postN.region === 'PROTECTED';
+          const isProtectedSynapse = preN.region === 'PROTECTED' || postN.region === 'PROTECTED';
           // Initial weight: Protected weights are calibrated strictly for governance stability
           const initialWeight = isProtectedSynapse
             ? 0.72 // immutable constitutional coupling
@@ -270,7 +270,31 @@ export class NeuromorphicSubstrate {
 
   public resetRefusalGate(): void {
     this.refusalGateTripped = false;
+    // Resetting a safety trip never grants execution authority. CHEK must unlock explicitly.
+    this.outputBusLocked = true;
+  }
+
+  public unlockOutputBus(authorizationVerified: boolean): boolean {
+    if (!authorizationVerified || this.killPathSevered || this.refusalGateTripped) {
+      this.outputBusLocked = true;
+      return false;
+    }
     this.outputBusLocked = false;
+    return true;
+  }
+
+  public lockOutputBus(): void {
+    this.outputBusLocked = true;
+  }
+
+  public verifyProtectedBoundary(): { passed: boolean; violations: string[] } {
+    const violations: string[] = [];
+    for (const [, syn] of this.synapses) {
+      const touchesProtected = syn.preNeuronId < PROTECTED_NEURON_COUNT || syn.postNeuronId < PROTECTED_NEURON_COUNT;
+      if (touchesProtected && !syn.isProtected) violations.push(syn.id);
+      if (syn.isProtected && syn.weight !== syn.initialWeight) violations.push(`${syn.id}:weight-mutated`);
+    }
+    return { passed: violations.length === 0, violations };
   }
 
   public getTelemetry(): SubstrateTelemetry {

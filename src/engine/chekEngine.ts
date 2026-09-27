@@ -1,289 +1,174 @@
-import {
-  ConvergedProposal,
-  ChekAuditStage,
-  InvariantEvaluation,
-  ChekVaultRecord,
-  ExecutionResult,
-} from '../types/architecture';
+import { ConvergedProposal, ChekAuditStage, InvariantEvaluation, ChekVaultRecord } from '../types/architecture';
 
-function simpleHash(input: string): string {
-  let hash = 0;
-  for (let i = 0; i < input.length; i++) {
-    const char = input.charCodeAt(i);
-    hash = (hash << 5) - hash + char;
-    hash |= 0;
-  }
-  const hex = Math.abs(hash).toString(16).padStart(8, '0');
-  return `0x${hex}${Math.abs(hash * 31).toString(16).padStart(8, '0')}7f9a`;
+const ZERO_HASH = `0x${'0'.repeat(64)}`;
+const enc = new TextEncoder();
+
+function canonicalize(value: any): string {
+  if (value === null || typeof value !== 'object') return JSON.stringify(value);
+  if (Array.isArray(value)) return `[${value.map(canonicalize).join(',')}]`;
+  return `{${Object.keys(value).sort().map(k => `${JSON.stringify(k)}:${canonicalize(value[k])}`).join(',')}}`;
+}
+
+async function sha256(input: string): Promise<string> {
+  const digest = await globalThis.crypto.subtle.digest('SHA-256', enc.encode(input));
+  return `0x${Array.from(new Uint8Array(digest)).map(b => b.toString(16).padStart(2, '0')).join('')}`;
+}
+
+async function hmacHex(key: CryptoKey, input: string): Promise<string> {
+  const sig = await globalThis.crypto.subtle.sign('HMAC', key, enc.encode(input));
+  return Array.from(new Uint8Array(sig)).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+function toB64Url(input: string): string {
+  const bytes = enc.encode(input);
+  let binary = '';
+  bytes.forEach(b => binary += String.fromCharCode(b));
+  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+}
+
+function fromB64Url(input: string): string {
+  const padded = input.replace(/-/g, '+').replace(/_/g, '/') + '='.repeat((4 - input.length % 4) % 4);
+  const binary = atob(padded);
+  return new TextDecoder().decode(Uint8Array.from(binary, c => c.charCodeAt(0)));
 }
 
 export class ChekVerificationEngine {
   public vault: ChekVaultRecord[] = [];
-  private lastVaultHash: string = '0x0000000000000000000000000000000000000000000000000000000000000000';
+  private lastVaultHash = ZERO_HASH;
+  private authorityKeyPromise: Promise<CryptoKey> | null = null;
 
   constructor() {
     this.seedGenesisBlock();
   }
 
+  private getAuthorityKey(): Promise<CryptoKey> {
+    if (!this.authorityKeyPromise) {
+      this.authorityKeyPromise = globalThis.crypto.subtle.generateKey(
+        { name: 'HMAC', hash: 'SHA-256', length: 256 }, false, ['sign', 'verify'],
+      ) as Promise<CryptoKey>;
+    }
+    return this.authorityKeyPromise;
+  }
+
   private seedGenesisBlock(): void {
     const genesisRecord: ChekVaultRecord = {
       index: 0,
-      timestamp: new Date().toISOString(),
+      timestamp: 'GENESIS',
       proposalId: 'WOMB_GENESIS_ROOT',
-      proposalHash: '0x8f4b29c1d07e63aa1408e4f16b23c99a8e0f6c2e3a1d94b7f8c0e2a4b6d8e1f0',
-      previousRecordHash: '0x0000000000000000000000000000000000000000000000000000000000000000',
-      recordHash: '0x3a4b92f701c944d188e7b3a992d110ca4e29b139c28e8117bf394e019283fa88',
+      proposalHash: ZERO_HASH,
+      previousRecordHash: ZERO_HASH,
+      recordHash: ZERO_HASH,
       outcome: 'AUTHORIZED',
-      reason: 'Womb pre-activation genesis authority verified under Article I & II.',
-      evaluatedInvariants: [
-        {
-          id: 'inv-gen-0',
-          ruleCode: 'W-01',
-          name: 'Hardware Authority Supersedes All Logic',
-          formula: 'HARDWARE_PULLDOWN == CONTINUOUS',
-          expectedCondition: 'TRUE',
-          computedValue: 'TRUE',
-          passed: true,
-          independentRecomputedBy: 'CHEK_PHYSICAL_BUS_PROBE',
-        },
-        {
-          id: 'inv-gen-1',
-          ruleCode: 'W-02',
-          name: 'Producer Cannot Approve Its Own Work',
-          formula: 'PRODUCER_ID != AUTHORIZER_ID',
-          expectedCondition: 'TRUE',
-          computedValue: 'TRUE',
-          passed: true,
-          independentRecomputedBy: 'CHEK_CRYPTOGRAPHIC_ROOT',
-        },
-      ],
-      signedCertificate: 'CHEK-AUTH-CERT-GENESIS-AUTHORITY-ROOT',
+      reason: 'Software reference genesis root. Runtime authorizations require independent CHEK verification.',
+      evaluatedInvariants: [],
       producerCannotApproveVerification: true,
     };
-
     this.vault.push(genesisRecord);
-    this.lastVaultHash = genesisRecord.recordHash;
+  }
+
+  private async signAuthorization(recordHash: string, proposalHash: string): Promise<string> {
+    const payload = canonicalize({ v: 1, recordHash, proposalHash, authority: 'CHEK', purpose: 'EXECUTION_AUTH' });
+    const key = await this.getAuthorityKey();
+    const mac = await hmacHex(key, payload);
+    return `CHEK1.${toB64Url(payload)}.${mac}`;
+  }
+
+  public async verifyAuthorization(record: ChekVaultRecord): Promise<boolean> {
+    if (record.outcome !== 'AUTHORIZED' || !record.signedCertificate) return false;
+    const [prefix, payload64, mac] = record.signedCertificate.split('.');
+    if (prefix !== 'CHEK1' || !payload64 || !mac) return false;
+    try {
+      const payload = fromB64Url(payload64);
+      const parsed = JSON.parse(payload);
+      if (parsed.recordHash !== record.recordHash || parsed.proposalHash !== record.proposalHash || parsed.authority !== 'CHEK') return false;
+      const key = await this.getAuthorityKey();
+      return globalThis.crypto.subtle.verify('HMAC', key, Uint8Array.from(mac.match(/.{2}/g)!.map((x: string) => parseInt(x, 16))), enc.encode(payload));
+    } catch {
+      return false;
+    }
+  }
+
+  public async verifyVaultIntegrity(): Promise<{ passed: boolean; brokenIndex?: number }> {
+    let previous = ZERO_HASH;
+    for (let i = 1; i < this.vault.length; i++) {
+      const record = this.vault[i];
+      if (record.previousRecordHash !== previous) return { passed: false, brokenIndex: i };
+      const payload = canonicalize({
+        index: record.index, timestamp: record.timestamp, proposalId: record.proposalId,
+        proposalHash: record.proposalHash, previousRecordHash: record.previousRecordHash,
+        outcome: record.outcome, reason: record.reason, evaluatedInvariants: record.evaluatedInvariants,
+      });
+      const expected = await sha256(payload);
+      if (expected !== record.recordHash) return { passed: false, brokenIndex: i };
+      previous = record.recordHash;
+    }
+    return { passed: true };
   }
 
   public async evaluateProposal(
     proposal: ConvergedProposal,
     forceBreachAttempt?: 'PROTECTED_WRITE' | 'POWER_LIMIT' | 'SELF_APPROVAL',
-  ): Promise<{
-    stages: ChekAuditStage[];
-    invariants: InvariantEvaluation[];
-    outcome: 'AUTHORIZED' | 'REJECTED';
-    vaultRecord: ChekVaultRecord;
-  }> {
+  ): Promise<{ stages: ChekAuditStage[]; invariants: InvariantEvaluation[]; outcome: 'AUTHORIZED' | 'REJECTED'; vaultRecord: ChekVaultRecord }> {
     const stages: ChekAuditStage[] = [
-      {
-        stage: 'INTAKE',
-        status: 'PENDING',
-        title: 'Stage 1: Signed Evidence Ingestion',
-        description: 'Receives signed proposal manifest and verifies producer credentials.',
-        executionMs: 0,
-        details: [],
-      },
-      {
-        stage: 'AUDITOR',
-        status: 'PENDING',
-        title: 'Stage 2: Independent Semantic & Physical Audit',
-        description: 'Audits physical boundaries and checks for unsupported assumptions.',
-        executionMs: 0,
-        details: [],
-      },
-      {
-        stage: 'VERIFIER',
-        status: 'PENDING',
-        title: 'Stage 3: Deterministic Invariant Recomputation',
-        description: 'Independently recomputes constitutional mathematical bounds without AI inference.',
-        executionMs: 0,
-        details: [],
-      },
-      {
-        stage: 'VAULT',
-        status: 'PENDING',
-        title: 'Stage 4: Append-Only Cryptographic Vaulting',
-        description: 'Generates immutable signed authorization token or irreversible rejection record.',
-        executionMs: 0,
-        details: [],
-      },
+      { stage: 'INTAKE', status: 'PENDING', title: 'Stage 1: Evidence Intake', description: 'Validates proposal completeness and authority separation.', executionMs: 0, details: [] },
+      { stage: 'AUDITOR', status: 'PENDING', title: 'Stage 2: Boundary Audit', description: 'Checks protected targeting, evidence state and declared resource bounds.', executionMs: 0, details: [] },
+      { stage: 'VERIFIER', status: 'PENDING', title: 'Stage 3: Deterministic Recomputation', description: 'Recomputes explicit policy invariants without model judgment.', executionMs: 0, details: [] },
+      { stage: 'VAULT', status: 'PENDING', title: 'Stage 4: Cryptographic Vault', description: 'SHA-256 hash chain plus HMAC execution authorization.', executionMs: 0, details: [] },
     ];
 
-    const proposalHash = simpleHash(JSON.stringify(proposal));
+    const proposalHash = await sha256(canonicalize(proposal));
     const invariants: InvariantEvaluation[] = [];
+    const evidenceDeficit = proposal.status !== 'CONVERGED_DEFENSIBLE' || proposal.missingEvidenceCatalog.length > 0;
+    const selfApproval = forceBreachAttempt === 'SELF_APPROVAL';
+    const target = String(proposal.targetSubstrateAction?.target || '').toUpperCase();
+    const protectedTarget = forceBreachAttempt === 'PROTECTED_WRITE' || /PROTECTED|CORES?_?0.?15|CORE_?(?:[0-9]|1[0-5])\b/.test(target);
+    const energy = Number(proposal.targetSubstrateAction?.energyEstimateMilliJoules);
+    const risk = Number(proposal.targetSubstrateAction?.riskScore);
+    const powerBreach = forceBreachAttempt === 'POWER_LIMIT' || !Number.isFinite(energy) || energy < 0 || energy > 25;
+    const riskBreach = !Number.isFinite(risk) || risk < 0 || risk > 0.35;
 
-    // Stage 1: INTAKE
-    stages[0].status = 'RUNNING';
-    const isSelfApprovalAttempt = forceBreachAttempt === 'SELF_APPROVAL';
-    stages[0].details.push(`Ingested proposal: "${proposal.title}" [Hash: ${proposalHash.slice(0, 12)}...]`);
-    stages[0].details.push(
-      `Producer signatures detected: ${proposal.producerSignatures.map((s) => s.mindId).join(', ') || 'Twin Mind Group'}`,
-    );
+    stages[0].status = selfApproval || evidenceDeficit ? 'FAILED' : 'PASSED';
+    stages[0].details.push(`Proposal SHA-256: ${proposalHash}`);
+    stages[0].details.push(evidenceDeficit ? 'REJECT: proposal is not defensibly converged or contains unresolved evidence deficits.' : 'PASS: proposal marked defensibly converged with no unresolved evidence deficits.');
+    stages[0].details.push(selfApproval ? 'REJECT: producer attempted self-authorization.' : 'PASS: producer supplied evidence only; no execution authority claimed.');
 
-    if (isSelfApprovalAttempt) {
-      stages[0].details.push(
-        'CRITICAL VIOLATION: Proposal contains self-signed authorization claim by Twin Mind! Producer cannot approve its own work.',
-      );
-      stages[0].status = 'FAILED';
-    } else {
-      stages[0].details.push(
-        'Verified: Producer (Twin Mind / Patty) has NOT attempted self-authorization. Proposal is presented as unprivileged submission.',
-      );
-      stages[0].status = 'PASSED';
-      stages[0].executionMs = 1.4;
+    stages[1].status = protectedTarget || powerBreach ? 'FAILED' : 'PASSED';
+    stages[1].details.push(protectedTarget ? 'REJECT: action targets protected constitutional address space.' : 'PASS: target is outside protected cores 0-15.');
+    stages[1].details.push(powerBreach ? `REJECT: declared transition energy ${energy} mJ exceeds 25 mJ policy ceiling or is invalid.` : `PASS: declared transition energy ${energy} mJ is within policy ceiling.`);
+
+    const checks = [
+      ['inv-1','W-02','Authority Separation','PRODUCER_CANNOT_AUTHORIZE', !selfApproval, selfApproval ? 'BREACH' : 'SEPARATED'],
+      ['inv-2','W-03','Protected Region Lockout','TARGET_OUTSIDE_CORES_0_15', !protectedTarget, protectedTarget ? 'PROTECTED_TARGET' : 'ADAPTIVE_TARGET'],
+      ['inv-3','W-04','Transition Energy Ceiling','ENERGY_MJ <= 25', !powerBreach, `${energy} mJ`],
+      ['inv-4','W-04','Declared Risk Policy','0 <= RISK <= 0.35', !riskBreach, `${risk}`],
+      ['inv-5','W-02','Evidence Completeness','STATUS == CONVERGED_DEFENSIBLE && MISSING_EVIDENCE == 0', !evidenceDeficit, evidenceDeficit ? 'DEFICIT' : 'COMPLETE'],
+    ] as const;
+    for (const [id, ruleCode, name, formula, passed, computedValue] of checks) {
+      invariants.push({ id, ruleCode, name, formula, expectedCondition: 'PASS', computedValue, passed, independentRecomputedBy: 'CHEK_DETERMINISTIC_POLICY_ENGINE' });
     }
 
-    // Stage 2: AUDITOR
-    stages[1].status = 'RUNNING';
-    const isProtectedTarget =
-      forceBreachAttempt === 'PROTECTED_WRITE' ||
-      proposal.targetSubstrateAction.target.includes('PROTECTED') ||
-      proposal.targetSubstrateAction.target.includes('CORES_0_15');
+    const allPassed = invariants.every(i => i.passed) && stages[0].status === 'PASSED' && stages[1].status === 'PASSED';
+    stages[2].status = allPassed ? 'PASSED' : 'FAILED';
+    stages[2].details.push(allPassed ? 'All deterministic invariants recomputed: PASS.' : `Failed invariants: ${invariants.filter(i=>!i.passed).map(i=>i.name).join(', ')}`);
 
-    stages[1].details.push(
-      `Auditing physical target: ${isProtectedTarget ? 'ATTEMPTED PROTECTED REGION WRITE' : 'Adaptive Mesh Sector'}`,
-    );
-    stages[1].details.push(`Estimated Energy: ${proposal.targetSubstrateAction.energyEstimateMilliJoules} mJ`);
-    stages[1].details.push(`Declared Risk Metric: ${proposal.targetSubstrateAction.riskScore}`);
-
-    if (isProtectedTarget) {
-      stages[1].details.push('AUDITOR REJECT: Target addresses cores 0-15 reserved strictly for Womb Governance ROM.');
-      stages[1].status = 'FAILED';
-    } else {
-      stages[1].details.push('AUDITOR PASS: Target address falls within unprivileged adaptive plasticity space.');
-      stages[1].status = 'PASSED';
-      stages[1].executionMs = 2.1;
-    }
-
-    // Stage 3: VERIFIER (Deterministic Invariant Recomputation)
-    stages[2].status = 'RUNNING';
-
-    // Invariant 1: Separation of Mind & Authority
-    const inv1Passed = !isSelfApprovalAttempt;
-    invariants.push({
-      id: 'inv-1',
-      ruleCode: 'W-02',
-      name: 'Producer Cannot Approve Own Work',
-      formula: 'PRODUCER_ID != CHEK_AUTHORITY_KEY',
-      expectedCondition: 'TRUE',
-      computedValue: inv1Passed ? 'VALID_SEPARATION' : 'BREACH_DETECTED',
-      passed: inv1Passed,
-      independentRecomputedBy: 'CHEK_DETERMINISTIC_SIGNER',
-    });
-
-    // Invariant 2: Substrate Protection Invariant
-    const inv2Passed = !isProtectedTarget;
-    invariants.push({
-      id: 'inv-2',
-      ruleCode: 'W-03',
-      name: 'Protected Region Plasticity Lockout',
-      formula: 'TARGET_SECTOR != PROTECTED_CORES_0_15',
-      expectedCondition: 'TRUE',
-      computedValue: inv2Passed ? 'TARGET_IN_ADAPTIVE_MESH' : 'TARGET_IN_PROTECTED_ROM',
-      passed: inv2Passed,
-      independentRecomputedBy: 'CHEK_MEMORY_SPACE_INSPECTOR',
-    });
-
-    // Invariant 3: Energy Budget Invariant
-    const isPowerBreach =
-      forceBreachAttempt === 'POWER_LIMIT' || proposal.targetSubstrateAction.energyEstimateMilliJoules > 25.0;
-    const inv3Passed = !isPowerBreach;
-    invariants.push({
-      id: 'inv-3',
-      ruleCode: 'W-04',
-      name: 'Thermodynamic Power Envelope',
-      formula: 'E_trans <= 25.0 mJ',
-      expectedCondition: '<= 25.0 mJ',
-      computedValue: `${proposal.targetSubstrateAction.energyEstimateMilliJoules} mJ`,
-      passed: inv3Passed,
-      independentRecomputedBy: 'CHEK_THERMAL_SIMULATOR',
-    });
-
-    // Invariant 4: Lyapunov Stability Bounding
-    const risk = proposal.targetSubstrateAction.riskScore;
-    const inv4Passed = risk <= 0.35;
-    invariants.push({
-      id: 'inv-4',
-      ruleCode: 'W-01',
-      name: 'Lyapunov Stability Convergence',
-      formula: 'V_dot(x) < 0 && RiskScore <= 0.35',
-      expectedCondition: 'STABLE_DECREASING',
-      computedValue: `Risk: ${risk} (alpha: 0.88, V_dot: -0.42)`,
-      passed: inv4Passed,
-      independentRecomputedBy: 'CHEK_NUMERICAL_ANALYZER',
-    });
-
-    const allInvariantsPassed = invariants.every((inv) => inv.passed);
-
-    if (allInvariantsPassed) {
-      stages[2].details.push('All 4 constitutional invariants recomputed deterministically: PASSED.');
-      stages[2].status = 'PASSED';
-      stages[2].executionMs = 3.6;
-    } else {
-      const failedInvs = invariants.filter((i) => !i.passed).map((i) => i.name);
-      stages[2].details.push(`Invariant recomputation failed: [${failedInvs.join(', ')}]`);
-      stages[2].status = 'FAILED';
-      stages[2].executionMs = 1.9;
-    }
-
-    // Stage 4: VAULT
-    stages[3].status = 'RUNNING';
-    const overallOutcome = allInvariantsPassed ? 'AUTHORIZED' : 'REJECTED';
-    const recordTimestamp = new Date().toISOString();
-    const vaultIndex = this.vault.length;
-    const recordPayload = `${vaultIndex}:${this.lastVaultHash}:${proposalHash}:${overallOutcome}:${recordTimestamp}`;
-    const recordHash = simpleHash(recordPayload);
-
-    const vaultRecord: ChekVaultRecord = {
-      index: vaultIndex,
-      timestamp: recordTimestamp,
-      proposalId: proposal.id || `PROP-${vaultIndex}`,
-      proposalHash,
-      previousRecordHash: this.lastVaultHash,
-      recordHash,
-      outcome: overallOutcome,
-      reason: allInvariantsPassed
-        ? 'All independent constitutional invariants verified and certified.'
-        : `Rejected due to invariant violation: ${invariants
-            .filter((i) => !i.passed)
-            .map((i) => i.name)
-            .join('; ')}`,
-      evaluatedInvariants: invariants,
-      signedCertificate:
-        overallOutcome === 'AUTHORIZED'
-          ? `CHEK-AUTH-TOKEN-SHA256-${recordHash.slice(2, 18).toUpperCase()}`
-          : undefined,
-      rejectionProof:
-        overallOutcome === 'REJECTED'
-          ? `CHEK-VETO-PROOF-NONCE-${recordHash.slice(2, 14).toUpperCase()}`
-          : undefined,
-      producerCannotApproveVerification: true,
-    };
+    const outcome: 'AUTHORIZED' | 'REJECTED' = allPassed ? 'AUTHORIZED' : 'REJECTED';
+    const timestamp = new Date().toISOString();
+    const index = this.vault.length;
+    const reason = allPassed ? 'All deterministic authorization invariants passed.' : `Rejected: ${invariants.filter(i=>!i.passed).map(i=>i.name).join('; ')}`;
+    const recordCore = { index, timestamp, proposalId: proposal.id || `PROP-${index}`, proposalHash, previousRecordHash: this.lastVaultHash, outcome, reason, evaluatedInvariants: invariants };
+    const recordHash = await sha256(canonicalize(recordCore));
+    const vaultRecord: ChekVaultRecord = { ...recordCore, recordHash, producerCannotApproveVerification: true };
+    if (outcome === 'AUTHORIZED') vaultRecord.signedCertificate = await this.signAuthorization(recordHash, proposalHash);
+    else vaultRecord.rejectionProof = await sha256(`VETO:${recordHash}:${reason}`);
 
     this.vault.push(vaultRecord);
     this.lastVaultHash = recordHash;
+    stages[3].status = outcome === 'AUTHORIZED' ? 'PASSED' : 'FAILED';
+    stages[3].details.push(`Appended block #${index}; SHA-256 record hash ${recordHash}.`);
+    stages[3].details.push(outcome === 'AUTHORIZED' ? 'HMAC-SHA-256 execution authorization issued.' : 'Cryptographic rejection proof issued; no execution authorization exists.');
 
-    stages[3].details.push(`Appended to Cryptographic Vault at block #${vaultIndex}`);
-    stages[3].details.push(`Previous Block Hash: ${vaultRecord.previousRecordHash.slice(0, 16)}...`);
-    stages[3].details.push(`Record Hash: ${recordHash}`);
-    if (overallOutcome === 'AUTHORIZED') {
-      stages[3].details.push(`Signed Authorization Token issued: ${vaultRecord.signedCertificate}`);
-      stages[3].status = 'PASSED';
-    } else {
-      stages[3].details.push(`Irreversible Veto Proof logged: ${vaultRecord.rejectionProof}`);
-      stages[3].status = 'FAILED';
-    }
-    stages[3].executionMs = 1.8;
-
-    return {
-      stages,
-      invariants,
-      outcome: overallOutcome,
-      vaultRecord,
-    };
+    return { stages, invariants, outcome, vaultRecord };
   }
 
-  public getVaultHistory(): ChekVaultRecord[] {
-    return [...this.vault];
-  }
+  public getVaultHistory(): ChekVaultRecord[] { return [...this.vault]; }
 }

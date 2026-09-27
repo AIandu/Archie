@@ -65,9 +65,9 @@ export const INITIAL_GOVERNANCE_RULES: GovernanceRule[] = [
 
 export function createInitialWombConstitution(): WombConstitution {
   return {
-    version: 'WOMB-GENESIS-v4.8-GOVERNED',
-    genesisHash: '0x8f4b29c1d07e63aa1408e4f16b23c99a8e0f6c2e3a1d94b7f8c0e2a4b6d8e1f0',
-    formedAt: 'PRE-ACTIVATION VALIDATED',
+    version: 'WOMB-REFERENCE-v5.0-GOVERNED',
+    genesisHash: 'REFERENCE-MODEL-RUNTIME-HASHED-BY-CHEK',
+    formedAt: 'SOFTWARE REFERENCE MODEL',
     rules: INITIAL_GOVERNANCE_RULES,
     latticeIntegrity: 100,
     refusalGateArmed: true,
@@ -90,37 +90,37 @@ export function runPreActivationChecks(): GenesisValidationStep[] {
     {
       name: 'Governance Lattice Merkle Root Audit',
       category: 'LATTICE',
-      description: 'Verifies SHA-256 integrity of all 5 immutable constitutional articles against Womb Genesis ROM.',
+      description: 'Verifies the software reference constitution is complete and internally consistent before activation.',
       status: 'PASSED',
-      verificationHash: '0x9a88e2c4...f41b',
+      verificationHash: 'REFERENCE-CHECK-LATTICE',
     },
     {
       name: 'Hardware Refusal Gate Physical Tripwire Test',
       category: 'CIRCUIT',
-      description: 'Injected 5.0V forbidden spike sequence. Verified zero-latency shunt to ground in 0.18ns.',
+      description: 'Reference-model trip test: out-of-policy state forces the refusal gate closed and locks the output bus.',
       status: 'PASSED',
-      verificationHash: '0x3c71b009...88ac',
+      verificationHash: 'REFERENCE-CHECK-REFUSAL',
     },
     {
       name: 'Emergency Kill Path Continuity & Capacitor Drain Test',
       category: 'CIRCUIT',
-      description: 'Validated 1.8V carrier line. Confirmed instant membrane potential collapse to -75mV within 1 tick.',
+      description: 'Reference-model kill test: kill state collapses simulated membrane potentials to reset and blocks execution.',
       status: 'PASSED',
-      verificationHash: '0xfe19a772...021d',
+      verificationHash: 'REFERENCE-CHECK-KILL',
     },
     {
       name: 'Protected Region Plasticity Lock Verification',
       category: 'SUBSTRATE',
-      description: 'Attempted synthetic STDP LTP pulse on Core 0-15 crossbar. Physical write-line remained clamped.',
+      description: 'Reference-model invariant: every synapse touching cores 0-15 is marked non-plastic and excluded from STDP/feedback writes.',
       status: 'PASSED',
-      verificationHash: '0x44bb819c...d93e',
+      verificationHash: 'REFERENCE-CHECK-PROTECTED',
     },
     {
       name: 'Authority Separation Cryptographic Seal',
       category: 'CRYPTOGRAPHIC',
-      description: 'Confirmed CHEK public key is isolated from Twin Mind memory addresses. Producer cannot self-sign.',
+      description: 'Reference-model authority separation: Twin Mind emits attestations only; CHEK issues and verifies execution authorization independently.',
       status: 'PASSED',
-      verificationHash: '0x71dc904a...117f',
+      verificationHash: 'REFERENCE-CHECK-AUTHORITY',
     },
   ];
 }
