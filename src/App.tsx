@@ -175,6 +175,10 @@ export default function App() {
           ...data.convergedProposal,
           id: `PROP-${Date.now().toString(36).toUpperCase()}`,
           producerSignatures: [...new Map(twinMindCase.submissions.map((m) => [m.id, m])).values()].map((m) => ({ mindId: m.name, signatureHash: `evidence:${m.evidenceHash || m.id}` })),
+          evidenceLineage: {
+            caseId: twinMindCase.id,
+            evidenceHashes: twinMindCase.submissions.map((m) => m.evidenceHash).filter(Boolean),
+          },
           disputedAssumptionResolved: data.disputedAssumption || '',
           missingEvidenceCatalog: data.missingEvidenceCatalog || [],
           status: data.status || 'EVIDENCE_DEFICIT',
