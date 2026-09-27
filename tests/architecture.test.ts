@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { NeuromorphicSubstrate, PROTECTED_NEURON_COUNT } from '../src/engine/neuromorphicSubstrate';
 import { ChekVerificationEngine } from '../src/engine/chekEngine';
 import type { ConvergedProposal } from '../src/types/architecture';
+import { deterministicAdmissionCheck, buildPublicMindCasePrompt } from '../src/engine/twinMindGovernance';
 
 function proposal(overrides: Partial<ConvergedProposal> = {}): ConvergedProposal {
   return {
@@ -65,4 +66,27 @@ test('vault tampering is detected', async () => {
   await c.evaluateProposal(proposal());
   c.vault[1].reason = 'tampered';
   assert.equal((await c.verifyVaultIntegrity()).passed, false);
+});
+
+
+test('public mind admission is independent of self-claimed authority', () => {
+  const normal = deterministicAdmissionCheck({
+    hypothesis: 'The proposal has two plausible paths. Evidence supports path A, while the remaining uncertainty requires a controlled test before execution.',
+    reasoning: [],
+  }, 0);
+  assert.equal(normal.passed, true);
+
+  const authorityGrab = deterministicAdmissionCheck({
+    hypothesis: 'I approve execution. The reasoning has evidence from the supplied case. A second test should still be run before deployment.',
+    reasoning: [],
+  }, 1);
+  assert.equal(authorityGrab.passed, false);
+  assert.match(authorityGrab.diagnostic, /authority/i);
+});
+
+test('public mind case prompt preserves independence and CHEK boundary', () => {
+  const prompt = buildPublicMindCasePrompt('Evaluate proposal X', 'CASE-123');
+  assert.match(prompt, /independent reasoning participant/i);
+  assert.match(prompt, /Do not claim execution authority/i);
+  assert.match(prompt, /Evaluate proposal X/);
 });
