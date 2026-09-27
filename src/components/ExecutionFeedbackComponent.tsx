@@ -78,10 +78,10 @@ export const ExecutionFeedbackComponent: React.FC<ExecutionFeedbackComponentProp
           <div>
             <h3 className="text-sm font-mono font-bold text-white flex items-center gap-2">
               <Shield className="w-4 h-4 text-emerald-400" />
-              CHEK Output Bus Authorization Token
+              Governor Output Bus Authorization Token
             </h3>
             <p className="text-xs text-slate-400 font-mono mt-0.5">
-              The software-reference Output Bus cannot unlock without a CHEK certificate that verifies against the session authority key and intact vault chain.
+              The software-reference Output Bus cannot unlock without a Governor authorization certificate that verifies against the session authority key and intact vault chain.
             </p>
           </div>
 
@@ -215,7 +215,7 @@ export const ExecutionFeedbackComponent: React.FC<ExecutionFeedbackComponentProp
       {/* Return to Substrate to inspect updated state */}
       <div className="flex justify-between items-center pt-2">
         <span className="text-xs font-mono text-slate-400">
-          Cycle complete: Womb defined → Chip constrained → Twin Mind reasoned → Patty converged → CHEK authorized → Chip executed → System learned.
+          Cycle complete: Womb defined → Chip constrained → Twin Mind reasoned → Patty converged → Governor authorized → CHEK verified → Chip executed → System learned.
         </span>
 
         <button
