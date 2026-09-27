@@ -66,3 +66,13 @@ Patty case history is currently process-persistent in the running Archie service
 - CHEK verifies Patty evidence lineage and convergence state, independently reproduces Governor policy, checks exact proposal binding and Governor certificate validity, and checks protected substrate integrity.
 - Execution requires an existing Governor authorization plus a VALID CHEK verification. CHEK cannot create permission; it establishes whether the Governor permission and governed chain are trustworthy.
 - Governor and CHEK maintain separate tamper-evident ledgers in this software reference implementation.
+
+## Patty cognitive-partner restoration
+
+- Patty is the human-facing front door to Archie rather than a mandatory committee screen.
+- Patty follows an explicit Truth Protocol: facts/evidence/inference/uncertainty are separated; absent evidence and tool results may not be invented; useful answers come before caveats; corrections happen when premises fail.
+- Patty supports cognitive, predictive, generative, and decisive reasoning modes while retaining zero execution authority.
+- Patty receives the active persistent case plus a bounded continuity index of recent Archie cases so older project decisions can be surfaced without pretending unsupported memory.
+- Twin Mind is selectively recommended for consequential decisions, unresolved factual disputes, weak evidence, meaningful prediction uncertainty, adversarial review, or explicit operator request. Ordinary conversation does not automatically spend five-mind compute.
+- Public minds still receive only the operator's raw case question. Patty's private governance/context is never injected into the public-mind prompt.
+- Patty can recommend Twin Mind, but the operator chooses whether to bring it in. Governor and CHEK remain downstream and independent of Patty's cognition.
