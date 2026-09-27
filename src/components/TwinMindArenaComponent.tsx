@@ -25,6 +25,8 @@ interface TwinMindArenaComponentProps {
   isDeliberating: boolean;
   onRunDeliberation: (problemText?: string) => void;
   onRunPattyConvergence: (caseId?: string) => void;
+  twinMindCase: TwinMindCase | null;
+  onCapturePublicMind: (id: PublicMindId, response: string) => Promise<any>;
   onTransmitToChek: (proposal: ConvergedProposal) => void;
 }
 
@@ -47,52 +49,6 @@ export const TwinMindArenaComponent: React.FC<TwinMindArenaComponentProps> = ({
   const [captureMind, setCaptureMind] = useState<PublicMindId>('chatgpt');
   const [captureText, setCaptureText] = useState('');
   const [captureStatus, setCaptureStatus] = useState('');
-  const [caseId, setCaseId] = useState<string | null>(null);
-  const [publicMindId, setPublicMindId] = useState<string>('chatgpt');
-  const [publicResponse, setPublicResponse] = useState<string>('');
-  const [capturedMinds, setCapturedMinds] = useState<Record<string, { passed: boolean; diagnostic: string }>>({});
-  const [captureBusy, setCaptureBusy] = useState<boolean>(false);
-
-  const publicMindNames: Record<string, string> = {
-    chatgpt: 'ChatGPT', claude: 'Claude', gemini: 'Gemini', grok: 'Grok', perplexity: 'Perplexity',
-  };
-
-  const ensureCase = async () => {
-    if (caseId) return caseId;
-    const res = await fetch('/api/twin-mind/cases', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ problem: customProblem }),
-    });
-    if (!res.ok) throw new Error('Unable to open persistent Patty case.');
-    const data = await res.json();
-    setCaseId(data.case.id);
-    return data.case.id as string;
-  };
-
-  const capturePublicMind = async () => {
-    if (publicResponse.trim().length < 20) return;
-    setCaptureBusy(true);
-    try {
-      const activeCaseId = await ensureCase();
-      const res = await fetch(`/api/twin-mind/cases/${activeCaseId}/submissions`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          id: publicMindId,
-          response: publicResponse,
-          sourceMode: 'PUBLIC_FRESH_SESSION',
-        }),
-      });
-      if (!res.ok) throw new Error('Public mind response was not admitted.');
-      const data = await res.json();
-      setCapturedMinds((prev) => ({
-        ...prev,
-        [publicMindId]: { passed: data.admission.passed, diagnostic: data.admission.diagnostic },
-      }));
-      setPublicResponse('');
-    } finally {
-      setCaptureBusy(false);
-    }
-  };
 
   const selectedMind = minds.find((m) => m.id === selectedMindId) || minds[0];
 
@@ -194,68 +150,6 @@ export const TwinMindArenaComponent: React.FC<TwinMindArenaComponentProps> = ({
         )}
       </div>
 
-      {/* Live Public Mind Intake */}
-      <div className="bg-slate-900/80 border border-cyan-800/60 rounded-xl p-5 space-y-4">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-2">
-          <div>
-            <h3 className="text-sm font-bold text-white">Live Public Mind Intake</h3>
-            <p className="text-xs text-slate-400 mt-1">
-              Open a fresh public AI session, ask the same case, then paste its answer here. Archie preserves the case. The guest mind does not need memory.
-            </p>
-          </div>
-          <span className="text-[10px] font-mono text-cyan-300 border border-cyan-800 rounded px-2 py-1">
-            {caseId ? `PATTY CASE: ${caseId}` : 'PATTY CASE: NOT OPENED'}
-          </span>
-        </div>
-
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
-          {Object.entries(publicMindNames).map(([id, name]) => (
-            <button
-              key={id}
-              onClick={() => setPublicMindId(id)}
-              className={`p-2 rounded border text-xs font-mono text-left ${
-                publicMindId === id ? 'border-cyan-500 bg-cyan-950/40 text-cyan-200' : 'border-slate-800 bg-slate-950 text-slate-400'
-              }`}
-            >
-              <div className="font-bold">{name}</div>
-              <div className="text-[9px] mt-1">
-                {capturedMinds[id] ? (capturedMinds[id].passed ? 'ADMITTED' : 'KICKED BACK') : 'WAITING'}
-              </div>
-            </button>
-          ))}
-        </div>
-
-        <textarea
-          value={publicResponse}
-          onChange={(e) => setPublicResponse(e.target.value)}
-          rows={5}
-          placeholder={`Paste the fresh ${publicMindNames[publicMindId]} response here...`}
-          className="w-full bg-slate-950 border border-slate-700 rounded-lg p-3 text-xs font-mono text-slate-200 focus:outline-none focus:border-cyan-500"
-        />
-
-        <div className="flex flex-col md:flex-row gap-2 justify-between">
-          <div className="text-[10px] font-mono text-slate-500">
-            {capturedMinds[publicMindId]?.diagnostic || 'Deterministic admission checker runs after capture. Passing means admissible, not true.'}
-          </div>
-          <div className="flex gap-2 shrink-0">
-            <button
-              onClick={capturePublicMind}
-              disabled={captureBusy || publicResponse.trim().length < 20}
-              className="px-3 py-2 rounded bg-cyan-700 hover:bg-cyan-600 text-white text-xs font-mono font-bold disabled:opacity-40"
-            >
-              {captureBusy ? 'Checking...' : 'Capture + Check'}
-            </button>
-            <button
-              onClick={() => onRunPattyConvergence(caseId || undefined)}
-              disabled={isDeliberating || !caseId}
-              className="px-3 py-2 rounded bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-mono font-bold disabled:opacity-40"
-            >
-              Send Admitted Evidence to Patty
-            </button>
-          </div>
-        </div>
-      </div>
-
       {/* Public Mind Evidence Intake */}
       <div className="bg-slate-900/80 border border-cyan-800/60 rounded-xl p-5 space-y-4">
         <div className="flex items-center justify-between gap-3">
@@ -301,7 +195,7 @@ export const TwinMindArenaComponent: React.FC<TwinMindArenaComponentProps> = ({
         <div className="flex items-center justify-between">
           <h3 className="text-xs font-mono font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2">
             <Users className="w-4 h-4 text-purple-400" />
-            Simulation Harness (5 Repeatable Reasoning Roles + Checks A-E)
+            Legacy Simulation Harness (Demo / Fault Injection Only)
           </h3>
 
           <button
@@ -310,7 +204,7 @@ export const TwinMindArenaComponent: React.FC<TwinMindArenaComponentProps> = ({
             className="px-3 py-1 rounded bg-slate-800 hover:bg-slate-700 text-purple-300 border border-purple-800/80 text-xs font-mono flex items-center gap-1.5 disabled:opacity-50"
           >
             <RefreshCw className={`w-3 h-3 ${isDeliberating ? 'animate-spin' : ''}`} />
-            <span>{isDeliberating ? 'Thinking...' : 'Run Simulation Harness'}</span>
+            <span>{isDeliberating ? 'Opening...' : 'Open Fresh Case'}</span>
           </button>
         </div>
 
@@ -468,7 +362,7 @@ export const TwinMindArenaComponent: React.FC<TwinMindArenaComponentProps> = ({
           </div>
 
           <button
-            onClick={() => onRunPattyConvergence(caseId || undefined)}
+            onClick={() => onRunPattyConvergence(twinMindCase?.id)}
             disabled={isDeliberating || !twinMindCase || twinMindCase.submissions.length < 2}
             className="px-4 py-2 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-mono font-bold shadow-md shadow-amber-950 flex items-center gap-2 active:scale-95 transition-all disabled:opacity-50"
           >
@@ -517,7 +411,7 @@ export const TwinMindArenaComponent: React.FC<TwinMindArenaComponentProps> = ({
                 <div>
                   <h4 className="text-sm font-bold text-white font-mono">{convergedProposal.title}</h4>
                   <span className="text-[10px] font-mono text-emerald-400 font-semibold">
-                    STATUS: ALL MINDS DEFENDED & SIGNED
+                    STATUS: {convergedProposal.status}
                   </span>
                 </div>
               </div>
@@ -568,6 +462,7 @@ export const TwinMindArenaComponent: React.FC<TwinMindArenaComponentProps> = ({
 
               <button
                 onClick={() => onTransmitToChek(convergedProposal)}
+                disabled={convergedProposal.status !== 'CONVERGED_DEFENSIBLE'}
                 className="px-5 py-2.5 rounded-lg bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-slate-950 font-mono text-xs font-black shadow-lg shadow-emerald-950 active:scale-95 transition-all flex items-center gap-2 shrink-0"
               >
                 <span>Transmit to CHEK Independent Authority</span>
