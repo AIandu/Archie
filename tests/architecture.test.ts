@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { NeuromorphicSubstrate, PROTECTED_NEURON_COUNT } from '../src/engine/neuromorphicSubstrate';
+import { GovernorPolicyEngine } from '../src/engine/governorEngine';
 import { ChekVerificationEngine } from '../src/engine/chekEngine';
 import type { ConvergedProposal } from '../src/types/architecture';
 import { deterministicAdmissionCheck, buildPublicMindCasePrompt } from '../src/engine/twinMindGovernance';
@@ -40,36 +41,40 @@ test('resetting refusal gate never unlocks output bus', () => {
   assert.equal(s.outputBusLocked, true);
 });
 
-test('CHEK authorizes valid proposal and certificate verifies', async () => {
-  const c = new ChekVerificationEngine();
-  const result = await c.evaluateProposal(proposal());
-  assert.equal(result.outcome, 'AUTHORIZED');
-  assert.equal(await c.verifyAuthorization(result.vaultRecord), true);
-  assert.equal((await c.verifyVaultIntegrity()).passed, true);
+test('Governor authorizes valid proposal and certificate verifies', async () => {
+  const g = new GovernorPolicyEngine(); const r = await g.evaluateProposal(proposal());
+  assert.equal(r.outcome, 'AUTHORIZED'); assert.equal(await g.verifyAuthorization(r.vaultRecord), true);
+  assert.equal((await g.verifyVaultIntegrity()).passed, true);
 });
 
-test('CHEK rejects protected writes, evidence deficits, self approval, and power breach', async () => {
+test('Governor rejects protected writes, evidence deficits, self approval, and power breach', async () => {
   for (const [p, breach] of [
     [proposal({ targetSubstrateAction: { target: 'PROTECTED_CORE_4', actionType: 'STATE_TRANSITION', parameters: {}, riskScore: 0.1, energyEstimateMilliJoules: 10 } }), undefined],
     [proposal({ status: 'EVIDENCE_DEFICIT', missingEvidenceCatalog: ['measurement'] }), undefined],
-    [proposal({ evidenceLineage: undefined }), undefined],
-    [proposal(), 'SELF_APPROVAL'],
-    [proposal(), 'POWER_LIMIT'],
-  ] as const) {
-    const c = new ChekVerificationEngine();
-    const r = await c.evaluateProposal(p, breach as any);
-    assert.equal(r.outcome, 'REJECTED');
-    assert.equal(await c.verifyAuthorization(r.vaultRecord), false);
-  }
+    [proposal({ evidenceLineage: undefined }), undefined], [proposal(), 'SELF_APPROVAL'], [proposal(), 'POWER_LIMIT'],
+  ] as const) { const g=new GovernorPolicyEngine(); const r=await g.evaluateProposal(p,breach as any); assert.equal(r.outcome,'REJECTED'); assert.equal(await g.verifyAuthorization(r.vaultRecord),false); }
 });
 
-test('vault tampering is detected', async () => {
-  const c = new ChekVerificationEngine();
-  await c.evaluateProposal(proposal());
-  c.vault[1].reason = 'tampered';
-  assert.equal((await c.verifyVaultIntegrity()).passed, false);
+test('Governor vault tampering is detected', async () => {
+  const g=new GovernorPolicyEngine(); await g.evaluateProposal(proposal()); g.vault[1].reason='tampered';
+  assert.equal((await g.verifyVaultIntegrity()).passed,false);
 });
 
+function caseEvidence(): any { return { id:'CASE-TEST-1', problem:'test', createdAt:'', updatedAt:'', submissions:[
+  { evidenceHash:'a'.repeat(64), admission:{passed:true} }, { evidenceHash:'b'.repeat(64), admission:{passed:true} }
+], challenges:[], history:[] }; }
+
+test('CHEK independently verifies Governor without issuing authority', async () => {
+  const g=new GovernorPolicyEngine(), p=proposal(), gov=await g.evaluateProposal(p), c=new ChekVerificationEngine();
+  const r=await c.verifyGovernedChain({proposal:p,governorRecord:gov.vaultRecord,twinMindCase:caseEvidence(),governorCertificateValid:await g.verifyAuthorization(gov.vaultRecord),protectedBoundaryPassed:true});
+  assert.equal(r.outcome,'VALID'); assert.equal('signedCertificate' in r.vaultRecord,false); assert.equal((await c.verifyVaultIntegrity()).passed,true);
+});
+
+test('CHEK detects Governor divergence', async () => {
+  const g=new GovernorPolicyEngine(), p=proposal(), gov=await g.evaluateProposal(p); gov.vaultRecord.outcome='REJECTED';
+  const c=new ChekVerificationEngine(); const r=await c.verifyGovernedChain({proposal:p,governorRecord:gov.vaultRecord,twinMindCase:caseEvidence(),governorCertificateValid:false,protectedBoundaryPassed:true});
+  assert.equal(r.outcome,'INCONSISTENT');
+});
 
 test('public mind admission is independent of self-claimed authority', () => {
   const normal = deterministicAdmissionCheck({
