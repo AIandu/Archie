@@ -19,6 +19,8 @@ interface Props {
   onTalkToPatty: (message: string) => Promise<string>;
   onOpenCase: () => Promise<void>;
   pattyConversation: { at: string; role: 'USER' | 'PATTY'; text: string }[];
+  caseHistory: Array<{ id: string; problem: string; createdAt: string; updatedAt: string; submissionCount: number; challengeCount: number; lastStatus: string | null }>;
+  onLoadCase: (caseId: string) => Promise<void>;
 }
 
 const PUBLIC_MINDS: { id: PublicMindId; label: string; url: string }[] = [
@@ -32,7 +34,7 @@ const PUBLIC_MINDS: { id: PublicMindId; label: string; url: string }[] = [
 export const TwinMindArenaComponent: React.FC<Props> = ({
   currentScenario, isDeliberating, onRunDeliberation, onRunPattyConvergence,
   twinMindCase, onCapturePublicMind, convergedProposal, onTransmitToChek,
-  onTalkToPatty, pattyConversation,
+  onTalkToPatty, pattyConversation, caseHistory, onLoadCase,
 }) => {
   const [question, setQuestion] = useState('');
   const [captureMind, setCaptureMind] = useState<PublicMindId>('chatgpt');
@@ -41,6 +43,7 @@ export const TwinMindArenaComponent: React.FC<Props> = ({
   const [pattyInput, setPattyInput] = useState('');
   const [showEvidence, setShowEvidence] = useState(false);
   const [showMacroSetup, setShowMacroSetup] = useState(false);
+  const [showCaseHistory, setShowCaseHistory] = useState(false);
 
   const uniqueMinds = new Set((twinMindCase?.submissions || []).map(x => x.id)).size;
   const activeQuestion = twinMindCase?.problem || '';
@@ -106,6 +109,29 @@ export const TwinMindArenaComponent: React.FC<Props> = ({
   };
 
   return <div className="max-w-4xl mx-auto space-y-5">
+    <section className="rounded-2xl border border-stone-800 bg-[#0b0a08] p-4 sm:p-5">
+      <button onClick={()=>setShowCaseHistory(!showCaseHistory)} className="w-full flex items-center justify-between gap-3 text-left">
+        <div>
+          <p className="text-[11px] font-mono tracking-[.18em] text-amber-200/70">CASE HISTORY</p>
+          <p className="text-xs text-stone-500 mt-1">{caseHistory.length} persisted case{caseHistory.length===1?'':'s'} available</p>
+        </div>
+        {showCaseHistory?<ChevronUp size={16} className="text-stone-500"/>:<ChevronDown size={16} className="text-stone-500"/>}
+      </button>
+      {showCaseHistory && <div className="mt-4 space-y-2 max-h-72 overflow-y-auto">
+        {caseHistory.length===0 ? <p className="text-xs text-stone-600">No persisted cases found.</p> : caseHistory.map(item=>
+          <button key={item.id} onClick={async()=>{ setStatus('Loading case...'); try { await onLoadCase(item.id); setStatus('Case restored.'); } catch(e:any){ setStatus(e?.message || 'Unable to restore case.'); } }}
+            className={`w-full rounded-lg border p-3 text-left ${twinMindCase?.id===item.id?'border-amber-200/30 bg-amber-950/10':'border-stone-800 bg-black/30'}`}>
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-[10px] font-mono text-stone-500">{item.id}</span>
+              <span className={`text-[10px] font-mono ${item.lastStatus==='CONVERGED_DEFENSIBLE'?'text-emerald-400':item.lastStatus==='EVIDENCE_DEFICIT'?'text-amber-300':'text-stone-600'}`}>{item.lastStatus || 'OPEN'}</span>
+            </div>
+            <p className="mt-1 text-sm text-stone-200 line-clamp-2">{item.problem}</p>
+            <p className="mt-2 text-[10px] font-mono text-stone-600">{item.submissionCount}/5 responses · {new Date(item.updatedAt).toLocaleString()}</p>
+          </button>
+        )}
+      </div>}
+    </section>
+
     <section className="rounded-2xl border border-amber-200/15 bg-[#0b0a08] p-5 sm:p-7">
       <p className="text-[11px] font-mono tracking-[.18em] text-amber-200/70">ASK ARCHIE</p>
       <h2 className="text-2xl font-bold text-stone-100 mt-2">What do you want the minds to solve?</h2>
