@@ -12,12 +12,13 @@ import {
   TrendingDown,
   Cpu,
 } from 'lucide-react';
-import { ConvergedProposal, ChekVaultRecord, ExecutionResult } from '../types/architecture';
+import { ConvergedProposal, GovernorVaultRecord, ChekVerificationRecord, ExecutionResult } from '../types/architecture';
 import { NeuromorphicSubstrate } from '../engine/neuromorphicSubstrate';
 
 interface ExecutionFeedbackComponentProps {
   proposal: ConvergedProposal | null;
-  vaultRecord: ChekVaultRecord | null;
+  vaultRecord: GovernorVaultRecord | null;
+  chekRecord: ChekVerificationRecord | null;
   substrate: NeuromorphicSubstrate;
   onDispatchExecution: () => void;
   executionResult: ExecutionResult | null;
@@ -28,6 +29,7 @@ interface ExecutionFeedbackComponentProps {
 export const ExecutionFeedbackComponent: React.FC<ExecutionFeedbackComponentProps> = ({
   proposal,
   vaultRecord,
+  chekRecord,
   substrate,
   onDispatchExecution,
   executionResult,
@@ -53,7 +55,7 @@ export const ExecutionFeedbackComponent: React.FC<ExecutionFeedbackComponentProp
         <div className="relative z-10 max-w-3xl space-y-2">
           <div className="flex items-center gap-2">
             <span className="px-2.5 py-0.5 rounded-full text-xs font-mono font-bold bg-blue-900/80 text-blue-300 border border-blue-700">
-              STAGE 6: CONTROLLED EXECUTION & CLOSED-LOOP FEEDBACK
+              STAGE 7: CONTROLLED EXECUTION & CLOSED-LOOP FEEDBACK
             </span>
             <span className="text-xs font-mono text-slate-400">
               Authorized Output Bus • Plasticity Learning Loop
@@ -81,12 +83,12 @@ export const ExecutionFeedbackComponent: React.FC<ExecutionFeedbackComponentProp
               Governor Output Bus Authorization Token
             </h3>
             <p className="text-xs text-slate-400 font-mono mt-0.5">
-              The software-reference Output Bus cannot unlock without a Governor authorization certificate that verifies against the session authority key and intact vault chain.
+              The software-reference Output Bus requires a valid Governor authorization certificate plus a VALID independent CHEK verification. CHEK verifies permission; it does not create permission.
             </p>
           </div>
 
           <span className="text-xs font-mono px-3 py-1 rounded bg-emerald-950 text-emerald-300 border border-emerald-800 font-bold">
-            {vaultRecord?.signedCertificate ? 'AUTHORIZED & UNCLAMPED' : 'AWAITING SIGNATURE'}
+            {vaultRecord?.signedCertificate && chekRecord?.outcome === 'VALID' ? 'GOVERNOR AUTHORIZED • CHEK VERIFIED' : 'AWAITING VERIFIED AUTHORIZATION'}
           </span>
         </div>
 
@@ -110,7 +112,7 @@ export const ExecutionFeedbackComponent: React.FC<ExecutionFeedbackComponentProp
 
           <button
             onClick={handleExecute}
-            disabled={isExecuting || !vaultRecord?.signedCertificate}
+            disabled={isExecuting || !vaultRecord?.signedCertificate || chekRecord?.outcome !== 'VALID'}
             className={`px-6 py-2.5 rounded-lg text-xs font-mono font-black flex items-center gap-2 transition-all shadow-lg ${
               isExecuting
                 ? 'bg-blue-800 text-blue-200 cursor-wait'
