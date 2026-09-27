@@ -11,6 +11,7 @@ function proposal(overrides: Partial<ConvergedProposal> = {}): ConvergedProposal
     defensibilityPact: 'all minds reconstructed objections', disputedAssumptionResolved: 'none',
     targetSubstrateAction: { target: 'ADAPTIVE_MESH_SECTOR_3', actionType: 'STATE_TRANSITION', parameters: {}, riskScore: 0.1, energyEstimateMilliJoules: 10 },
     producerSignatures: [{ mindId: 'charlie', signatureHash: 'attest:charlie' }],
+    evidenceLineage: { caseId: 'CASE-TEST-1', evidenceHashes: ['a'.repeat(64), 'b'.repeat(64)] },
     missingEvidenceCatalog: [], status: 'CONVERGED_DEFENSIBLE', ...overrides,
   };
 }
@@ -51,6 +52,7 @@ test('CHEK rejects protected writes, evidence deficits, self approval, and power
   for (const [p, breach] of [
     [proposal({ targetSubstrateAction: { target: 'PROTECTED_CORE_4', actionType: 'STATE_TRANSITION', parameters: {}, riskScore: 0.1, energyEstimateMilliJoules: 10 } }), undefined],
     [proposal({ status: 'EVIDENCE_DEFICIT', missingEvidenceCatalog: ['measurement'] }), undefined],
+    [proposal({ evidenceLineage: undefined }), undefined],
     [proposal(), 'SELF_APPROVAL'],
     [proposal(), 'POWER_LIMIT'],
   ] as const) {
