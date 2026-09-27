@@ -376,72 +376,27 @@ Return JSON:
     }
   }
 
-  // Deterministic fallback
+  // Safe offline fallback: never fabricate convergence evidence.
   return res.json({
-    dialogue: [
-      {
-        speaker: 'Sargent Patty',
-        target: 'Mind Claude',
-        instruction: "Claude, explain why Charlie's formal Lyapunov invariant fails during asynchronous bus spikes.",
-        response:
-          "Charlie assumed instantaneous clock propagation across all crossbar junctions. In physical silicon, propagation delay introduces a 1.2ms skew where an attacker or sensor lag can violate the bounding polytope.",
-      },
-      {
-        speaker: 'Sargent Patty',
-        target: 'Mind Charlie',
-        instruction: "Charlie, reconstruct Claude's reasoning without softening your formal rigor.",
-        response:
-          "Understood. Claude is correct that discrete clock synchronization is an unstated axiom in my proof. If we incorporate a non-zero propagation delay tau_skew in [0, 1.4ms], the Lyapunov derivative V_dot remains negative if and only if we introduce a dynamic hysteresis cushion delta_h >= sup |dTelemetry/dt| * tau_skew.",
-      },
-      {
-        speaker: 'Sargent Patty',
-        target: 'Mind Gemini',
-        instruction: 'Gemini, attack the disputed assumption between Charlie and Claude.',
-        response:
-          'The disputed assumption is whether hysteresis adds intolerable latency. By phase-locking the neuromorphic LIF neurons to a 200Hz carrier wave, the hysteresis delay collapses from 1.4ms to 0.35ms, preserving both formal stability and biological-speed reaction.',
-      },
-      {
-        speaker: 'Sargent Patty',
-        target: 'Mind Athena',
-        instruction: 'Athena, stress-test this phase-locked hybrid against worst-case adversary injection.',
-        response:
-          'I attempted high-entropy burst flooding at 300% rated capacity. With the 0.35ms phase-lock and Charlie’s updated bounds, the hardware Refusal Gate quenches the noise at cycle 12 without destabilizing the adaptive mesh. The adversary gets no traction.',
-      },
-      {
-        speaker: 'Sargent Patty',
-        target: 'Mind Daedalus',
-        instruction: 'Daedalus, build the final executable proposal. Every mind will sign.',
-        response:
-          'Synthesized into executable state transition packet #ST-8842. Consumes 14.6mJ, strictly confines plasticity updates to the Adaptive Region, and complies with Womb Rule W-01.',
-      },
-    ],
-    disputedAssumption:
-      'Whether instantaneous clock synchronization across neuromorphic crossbar junctions can be assumed under asynchronous sensory drift.',
-    reconstructedEvidence:
-      'Incorporation of phase-locked LIF carrier wave (200Hz) with dynamic hysteresis cushion (0.35ms) mathematically satisfies Lyapunov stability while defending against burst injection.',
-    status: 'CONVERGED_DEFENSIBLE',
-    missingEvidenceCatalog: [],
+    dialogue: [{
+      speaker: 'Sargent Patty',
+      target: 'Twin Mind',
+      instruction: 'Convergence is paused until a configured Patty provider can evaluate the admitted evidence.',
+      response: 'No synthetic agreement will be substituted for missing deliberation.',
+    }],
+    disputedAssumption: 'Not evaluated while Patty provider is offline.',
+    reconstructedEvidence: '',
+    status: 'EVIDENCE_DEFICIT',
+    missingEvidenceCatalog: ['Configure OPENAI_API_KEY (preferred Patty control plane) or GEMINI_API_KEY fallback, then rerun convergence.'],
     convergedProposal: {
-      title: 'Phase-Locked Dynamic Hysteresis State Transition',
-      coreDecision:
-        'Commit synchronized neuromorphic core transition with 0.35ms phase-locked carrier wave, binding actuator dispatch to verified Lyapunov stability bounds.',
-      computationalProof:
-        'Proof: For all tau in [0, 1.4ms], V_dot(x) <= -alpha*||x||^2 + delta_h < 0 when phase-lock carrier omega >= 200Hz. Hard refusal tripwire remains quiescent at 0.12V threshold.',
-      defensibilityPact:
-        'Unanimously defended: Charlie (mathematical stability), Claude (boundary resilience), Gemini (kinetic realism), Athena (adversarial robustness), Daedalus (hardware feasibility).',
-      targetSubstrateAction: {
-        target: 'ADAPTIVE_MESH_SECTOR_4',
-        actionType: 'STATE_TRANSITION',
-        parameters: {
-          sector: 'ADAPTIVE_4',
-          frequencyHz: 200,
-          hysteresisCushionMs: 0.35,
-          lyapunovBoundAlpha: 0.88,
-          targetActuatorState: 'BALANCED_STABILIZED',
-        },
-        riskScore: 0.14,
-      },
+      title: 'NO AUTHORIZED PROPOSAL',
+      coreDecision: 'Hold. Evidence has not been converged by Patty.',
+      computationalProof: 'No proof claimed.',
+      defensibilityPact: 'No pact claimed.',
+      targetSubstrateAction: { target: 'NONE', actionType: 'STATE_TRANSITION', parameters: {}, riskScore: 1, energyEstimateMilliJoules: 0 },
     },
+    caseId: persistentCase?.id,
+    pattyProvider: 'offline',
   });
 });
 
