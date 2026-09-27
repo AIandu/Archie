@@ -91,7 +91,7 @@ endmodule`;
             <span className="px-2.5 py-0.5 rounded-full text-xs font-mono font-bold bg-indigo-900/80 text-indigo-300 border border-indigo-700">
               HARDWARE SUBSTRATE BRIDGE
             </span>
-            <span className="text-xs font-mono text-slate-400">Silicon & FPGA Technical Specification</span>
+            <span className="text-xs font-mono text-slate-400">Target Hardware Specification (Not Yet Synthesized/Fabricated)</span>
           </div>
 
           <h2 className="text-2xl font-black tracking-tight text-white">
@@ -100,8 +100,7 @@ endmodule`;
 
           <p className="text-sm text-slate-300 leading-relaxed">
             The rest of the architecture (Womb, Twin Mind, Sargent Patty, and CHEK) does not care whether the substrate
-            is virtual or fabricated in silicon. It talks to the exact same packet interface, obeys the exact same
-            hardware tripwires, and respects the exact same physical constraints.
+            is virtual or fabricated in silicon. It talks to the exact same packet interface, uses the same logical substrate contract. The FPGA and ASIC sections below are target specifications, not evidence of synthesis, timing closure, packaging, or fabricated silicon.
           </p>
         </div>
       </div>
@@ -126,7 +125,7 @@ endmodule`;
               : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
           }`}
         >
-          Synthesizable Verilog HDL (RTL Crossbar)
+          Draft RTL Skeleton (Not Yet Synthesis-Verified)
         </button>
         <button
           onClick={() => setSpecTab('pinout')}
@@ -136,7 +135,7 @@ endmodule`;
               : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
           }`}
         >
-          FC-BGA 256 Pinout & Electrical Specs
+          Proposed Package / Signal Map
         </button>
       </div>
 
@@ -150,8 +149,7 @@ endmodule`;
                 <span>Protected Sector (Cores 0-15)</span>
               </div>
               <p className="text-slate-400 text-[11px] leading-relaxed">
-                Fabricated with non-reconfigurable metallization layers. Hardwires the Womb Governance Lattice into
-                physical conductance paths. Cannot be modified by software, machine learning, or consensus.
+                Target ASIC design: non-reconfigurable protected routing would enforce the same no-plasticity invariant that the current software reference model enforces on cores 0-15.
               </p>
             </div>
 
@@ -161,8 +159,7 @@ endmodule`;
                 <span>Adaptive Sector (Cores 16-63)</span>
               </div>
               <p className="text-slate-400 text-[11px] leading-relaxed">
-                Memristive RRAM synaptic crossbars implementing local analog STDP plasticity. Learns from closed-loop
-                execution observations without expanding into the protected sector.
+                Target hardware option: an adaptive crossbar implementing local STDP while preserving the protected-boundary invariant. RRAM is a proposed implementation technology, not a fabricated component in this build.
               </p>
             </div>
 
@@ -172,8 +169,7 @@ endmodule`;
                 <span>Hard Refusal & Kill Circuit</span>
               </div>
               <p className="text-slate-400 text-[11px] leading-relaxed">
-                Physical analog comparator network with 0.18ns shunt-to-ground response time. Dedicated 1.8V carrier
-                line that triggers full capacitor bank drainage if interrupted.
+                Target safety-circuit concept: an independent refusal/kill path below adaptive logic. Response time, voltage, and discharge behavior require electrical design, simulation, and bench validation.
               </p>
             </div>
           </div>
@@ -190,12 +186,12 @@ endmodule`;
               <span className="text-slate-600 font-bold">→</span>
               <div className="flex-1 p-3 rounded bg-slate-900 border border-indigo-800/80">
                 <span className="text-indigo-400 font-bold block">2. FPGA Prototype</span>
-                <span className="text-slate-400 text-[11px]">Verilog RTL Crossbar on UltraScale+</span>
+                <span className="text-slate-400 text-[11px]">RTL completion + simulation + synthesis + FPGA timing closure</span>
               </div>
               <span className="text-slate-600 font-bold">→</span>
               <div className="flex-1 p-3 rounded bg-slate-900 border border-purple-800/80">
                 <span className="text-purple-400 font-bold block">3. Fabricated ASIC</span>
-                <span className="text-slate-400 text-[11px]">TSMC 28nm HPC+ Spiking Silicon</span>
+                <span className="text-slate-400 text-[11px]">Foundry process selection + physical design + tape-out + validation</span>
               </div>
             </div>
           </div>
@@ -207,7 +203,7 @@ endmodule`;
         <div className="bg-slate-900/80 border border-slate-800 rounded-xl p-5 space-y-3">
           <div className="flex items-center justify-between">
             <span className="text-xs font-mono font-bold text-slate-400 uppercase tracking-wider">
-              Synthesizable Verilog HDL Source Code
+              Draft Verilog Architecture Skeleton
             </span>
             <button
               onClick={handleCopy}
@@ -227,7 +223,7 @@ endmodule`;
       {/* Tab: Pinout */}
       {specTab === 'pinout' && (
         <div className="bg-slate-900/80 border border-slate-800 rounded-xl p-5 space-y-4 font-mono text-xs">
-          <h3 className="text-sm font-bold text-white">FC-BGA 256 Package Pinout & Physical Signals</h3>
+          <h3 className="text-sm font-bold text-white">Proposed Package Pinout & Logical Signals</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="p-3 bg-slate-950 rounded-lg border border-slate-800 space-y-2">
               <span className="text-amber-400 font-bold block">Authority & Governance Signals</span>

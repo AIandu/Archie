@@ -72,7 +72,7 @@ export const TwinMindArenaComponent: React.FC<TwinMindArenaComponentProps> = ({
               STAGE 3 & 4: THE INTELLIGENCE
             </span>
             <span className="text-xs font-mono text-slate-400">
-              Twin Mind Outer Edge • Independent Checkers • Sargent Patty
+              Twin Mind Outer Edge • Deterministic Admission Checks • Sargent Patty
             </span>
           </div>
 
@@ -81,7 +81,7 @@ export const TwinMindArenaComponent: React.FC<TwinMindArenaComponentProps> = ({
           </h2>
 
           <p className="text-sm text-slate-300 leading-relaxed">
-            Multiple independent AI minds attack the same problem simultaneously, retaining their different reasoning
+            Multiple differentiated reasoning roles attack the same problem simultaneously, retaining their different reasoning
             styles rather than being reduced to assigned little jobs. Each mind's checker kicks back garbage before it
             reaches the center. Sargent Patty forces computational cross-examination — she doesn't count votes.
           </p>
@@ -150,7 +150,7 @@ export const TwinMindArenaComponent: React.FC<TwinMindArenaComponentProps> = ({
         <div className="flex items-center justify-between">
           <h3 className="text-xs font-mono font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2">
             <Users className="w-4 h-4 text-purple-400" />
-            Fast Outer Cognitive Edge (5 Independent Minds + Checkers A-E)
+            Fast Outer Cognitive Edge (5 Reasoning Roles + Checks A-E)
           </h3>
 
           <button
@@ -223,7 +223,7 @@ export const TwinMindArenaComponent: React.FC<TwinMindArenaComponentProps> = ({
           </div>
 
           <div className="space-y-2">
-            <label className="text-[10px] font-mono text-slate-400 uppercase">Independent Hypothesis</label>
+            <label className="text-[10px] font-mono text-slate-400 uppercase">Role Hypothesis</label>
             <div className="p-3 bg-slate-950 rounded-lg border border-slate-800 font-mono text-xs text-slate-200 leading-relaxed">
               "{selectedMind.hypothesis}"
             </div>
@@ -242,7 +242,7 @@ export const TwinMindArenaComponent: React.FC<TwinMindArenaComponentProps> = ({
           </div>
         </div>
 
-        {/* Independent Checker Card */}
+        {/* Admission Checker Card */}
         <div className="lg:col-span-5 bg-slate-900/80 border border-slate-800 rounded-xl p-5 space-y-3">
           <div className="flex items-center justify-between border-b border-slate-800 pb-2">
             <h4 className="text-xs font-mono font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
@@ -261,7 +261,7 @@ export const TwinMindArenaComponent: React.FC<TwinMindArenaComponentProps> = ({
           </div>
 
           <p className="text-xs text-slate-400 leading-relaxed">
-            "Before any hypothesis reaches the center, it passes through that participant's independent checker.
+            "Before any hypothesis reaches the center, it passes through that participant's deterministic admission checker.
             Garbage, unsupported claims, broken calculations and incomplete reasoning get kicked back."
           </p>
 

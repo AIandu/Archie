@@ -81,7 +81,7 @@ export const ExecutionFeedbackComponent: React.FC<ExecutionFeedbackComponentProp
               CHEK Output Bus Authorization Token
             </h3>
             <p className="text-xs text-slate-400 font-mono mt-0.5">
-              The Output Bus cannot unclamp without this cryptographic certificate.
+              The software-reference Output Bus cannot unlock without a CHEK certificate that verifies against the session authority key and intact vault chain.
             </p>
           </div>
 
@@ -130,7 +130,7 @@ export const ExecutionFeedbackComponent: React.FC<ExecutionFeedbackComponentProp
           <div className="lg:col-span-6 bg-slate-900/80 border border-slate-800 rounded-xl p-5 space-y-4">
             <h3 className="text-sm font-mono font-bold text-white flex items-center gap-2">
               <Activity className="w-4 h-4 text-cyan-400" />
-              Observed Physical / Cyber Execution Metrics
+              Reference-Model Execution Metrics
             </h3>
 
             <div className="grid grid-cols-2 gap-3 text-xs font-mono">

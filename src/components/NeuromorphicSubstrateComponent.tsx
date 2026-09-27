@@ -153,8 +153,8 @@ export const NeuromorphicSubstrateComponent: React.FC<NeuromorphicSubstrateCompo
           </div>
           <p className="text-slate-300">
             {portabilityView === 'fpga'
-              ? 'The Twin Mind and CHEK communicate with the chip via memory-mapped SPI/AXI4 register packet protocols. Synthesizable directly to Xilinx Ultrascale+ or Intel Stratix 10.'
-              : 'Physical TSMC 28nm Low-Power Neuromorphic layout: Cores 0-15 physically unroute STDP write-enable transistors, guaranteeing hardware immunity against software tampering.'}
+              ? 'Target bridge concept: preserve the same substrate contract when mapping the reference model to an FPGA interface such as AXI/SPI. RTL and synthesis are future validation steps.'
+              : 'Target ASIC concept: cores 0-15 would be physically isolated from plasticity write paths. The current build enforces this invariant in the software reference model only.'}
           </p>
           <pre className="bg-slate-950 p-3 rounded text-[11px] text-cyan-300 overflow-x-auto">
             {portabilityView === 'fpga'

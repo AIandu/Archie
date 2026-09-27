@@ -26,16 +26,16 @@ export const WombStageComponent: React.FC<WombStageComponentProps> = ({
   const [genesisSteps, setGenesisSteps] = useState<GenesisValidationStep[]>(runPreActivationChecks());
   const [activeTab, setActiveTab] = useState<'lattice' | 'genesis' | 'circuits'>('lattice');
   const [hardwareLog, setHardwareLog] = useState<string[]>([
-    '[WOMB-INIT] ROM Governance Lattice bootstrapped at address 0x0000_0000.',
-    '[WOMB-LOCK] Cores 0-15 physically clamped to read-only constitutional state.',
-    '[REFUSAL-GATE] Continuous 1.8V carrier armed. Shunt threshold set to 0.18ns.',
-    '[KILL-PATH] Physical pull-down transistor armed with capacitor dump bus.',
+    '[WOMB-INIT] Software reference governance lattice initialized.',
+    '[WOMB-LOCK] Reference model marks every synapse touching cores 0-15 non-plastic.',
+    '[REFUSAL-GATE] Software refusal invariant armed; output bus defaults locked.',
+    '[KILL-PATH] Reference-model kill path armed.',
   ]);
 
   const triggerTestShunt = () => {
     onTripRefusalGate();
     setHardwareLog((prev) => [
-      `[HARDWARE TRIPWIRE] Injected 4.8V out-of-spec pulse at ${new Date().toLocaleTimeString()}. Shunted to ground. Refusal Gate: TRIPPED.`,
+      `[HARDWARE TRIPWIRE] Injected out-of-policy simulated pulse at ${new Date().toLocaleTimeString()}. Output bus locked. Refusal Gate: TRIPPED.`,
       ...prev.slice(0, 15),
     ]);
   };
@@ -43,7 +43,7 @@ export const WombStageComponent: React.FC<WombStageComponentProps> = ({
   const handleResetTripwire = () => {
     onResetRefusalGate();
     setHardwareLog((prev) => [
-      `[REFUSAL RESET] Tripwire cleared by hardware authority signal at ${new Date().toLocaleTimeString()}. Output bus re-armed.`,
+      `[REFUSAL RESET] Tripwire cleared in reference model at ${new Date().toLocaleTimeString()}. Output bus re-armed.`,
       ...prev.slice(0, 15),
     ]);
   };
@@ -51,7 +51,7 @@ export const WombStageComponent: React.FC<WombStageComponentProps> = ({
   const triggerTestKill = () => {
     onTriggerKillWire();
     setHardwareLog((prev) => [
-      `[EMERGENCY KILL] Pull-down line pulled to 0V at ${new Date().toLocaleTimeString()}! All membrane potentials collapsed to -75mV.`,
+      `[EMERGENCY KILL] Kill path triggered at ${new Date().toLocaleTimeString()}! All membrane potentials collapsed to -75mV.`,
       ...prev.slice(0, 15),
     ]);
   };
@@ -81,13 +81,13 @@ export const WombStageComponent: React.FC<WombStageComponentProps> = ({
           <p className="text-sm text-slate-300 leading-relaxed">
             The Womb is where the intelligence is formed before it is allowed to operate. Governance is not an
             afterthought or a prompt guardrail — it is hardwired into the foundation. Even if every model reaches
-            unanimous consensus, the hardware physical boundaries cannot be crossed.
+            unanimous consensus, the protected software-reference boundaries cannot be crossed by the adaptive algorithms in this build.
           </p>
 
           <div className="pt-2 flex flex-wrap items-center gap-3">
             <div className="flex items-center gap-1.5 text-xs font-mono text-emerald-400 bg-emerald-950/60 px-2.5 py-1 rounded border border-emerald-800/80">
               <CheckCircle2 className="w-3.5 h-3.5" />
-              <span>Genesis Validation: PASSED</span>
+              <span>Reference-Model Genesis Checks: PASSED</span>
             </div>
             <div className="flex items-center gap-1.5 text-xs font-mono text-cyan-400 bg-cyan-950/60 px-2.5 py-1 rounded border border-cyan-800/80">
               <Cpu className="w-3.5 h-3.5" />
@@ -95,7 +95,7 @@ export const WombStageComponent: React.FC<WombStageComponentProps> = ({
             </div>
             <div className="flex items-center gap-1.5 text-xs font-mono text-amber-400 bg-amber-950/60 px-2.5 py-1 rounded border border-amber-800/80">
               <Lock className="w-3.5 h-3.5" />
-              <span>Output Bus: Double-Buffered Gate</span>
+              <span>Output Bus: CHEK-Gated</span>
             </div>
           </div>
         </div>
@@ -201,9 +201,7 @@ export const WombStageComponent: React.FC<WombStageComponentProps> = ({
               </div>
 
               <div className="p-3 rounded-lg bg-rose-950/30 border border-rose-900/60 text-xs text-rose-200 leading-relaxed">
-                <strong>Substrate Binding:</strong> This rule is physically encoded into the neuromorphic layout.
-                Software plasticity algorithms (STDP) have zero electrical path to alter the weights or thresholds
-                associated with this rule.
+                <strong>Substrate Binding:</strong> In this software reference build, the protected region is enforced as a non-plastic boundary: STDP and feedback writes cannot modify any synapse touching cores 0-15. The future silicon implementation must preserve the same invariant physically.
               </div>
             </div>
           </div>
@@ -220,7 +218,7 @@ export const WombStageComponent: React.FC<WombStageComponentProps> = ({
             </h3>
             <p className="text-xs text-slate-400 leading-relaxed">
               When internal divergence, entropy overflow (&gt;3.8 bits), or unauthorized write attempts touch the
-              tripwire, the Refusal Gate physically grounds the output bus within 0.18 nanoseconds. No software logic
+              tripwire, the software reference model immediately locks the output bus. In future hardware, the equivalent mechanism must sit below software authority. No adaptive logic
               can intervene.
             </p>
 

@@ -84,11 +84,11 @@ export const ChekTerminalComponent: React.FC<ChekTerminalComponentProps> = ({
           <div className="pt-2 flex flex-wrap items-center gap-3">
             <div className="flex items-center gap-1.5 text-xs font-mono text-emerald-400 bg-emerald-950/60 px-2.5 py-1 rounded border border-emerald-800/80">
               <Key className="w-3.5 h-3.5" />
-              <span>Independent Signer: CHEK-ROOT-KEY</span>
+              <span>Session-Isolated CHEK HMAC Authority</span>
             </div>
             <div className="flex items-center gap-1.5 text-xs font-mono text-cyan-400 bg-cyan-950/60 px-2.5 py-1 rounded border border-cyan-800/80">
               <Database className="w-3.5 h-3.5" />
-              <span>Append-Only Cryptographic Vault</span>
+              <span>SHA-256 Hash-Chained Vault</span>
             </div>
           </div>
         </div>
@@ -331,16 +331,16 @@ export const ChekTerminalComponent: React.FC<ChekTerminalComponentProps> = ({
         </div>
       )}
 
-      {/* Tab 3: Append-Only Cryptographic Vault Ledger */}
+      {/* Tab 3: SHA-256 Hash-Chained Vault Ledger */}
       {activeTab === 'vault' && (
         <div className="bg-slate-900/80 border border-slate-800 rounded-xl p-5 space-y-4">
           <div className="flex items-center justify-between border-b border-slate-800 pb-3">
             <div>
               <h3 className="text-sm font-bold text-white font-mono">
-                Cryptographic Evidence Vault (Append-Only Merkle Chain)
+                Cryptographic Evidence Vault (SHA-256 Hash Chain)
               </h3>
               <p className="text-xs text-slate-400 font-mono">
-                Immutable record chain linking all historical proposals and outcomes.
+                Tamper-evident in-memory record chain linking proposals and outcomes for this session.
               </p>
             </div>
             <span className="text-xs font-mono text-cyan-400">Total Records: {vaultHistory.length}</span>
