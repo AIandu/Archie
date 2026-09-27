@@ -148,10 +148,10 @@ export interface ConvergedProposal {
     parameters: Record<string, any>;
     riskScore: number; // 0 - 1
     energyEstimateMilliJoules: number;
-    evidenceLineage?: {
-  caseId: string;
-  evidenceHashes: string[];
-};
+  };
+  evidenceLineage?: {
+    caseId: string;
+    evidenceHashes: string[];
   };
   producerSignatures: { mindId: string; signatureHash: string }[];
   missingEvidenceCatalog: string[];
