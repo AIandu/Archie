@@ -160,7 +160,7 @@ export default function App() {
   };
 
   const handleRunPattyConvergence = async () => {
-    if (!twinMindCase || twinMindCase.submissions.length < 2) return;
+    if (!twinMindCase || new Set(twinMindCase.submissions.map((m) => m.id)).size < 2) return;
     setIsDeliberating(true);
     try {
       const res = await fetch('/api/twin-mind/patty-converge', {
@@ -174,7 +174,7 @@ export default function App() {
         setConvergedProposal({
           ...data.convergedProposal,
           id: `PROP-${Date.now().toString(36).toUpperCase()}`,
-          producerSignatures: twinMindCase.submissions.map((m) => ({ mindId: m.name, signatureHash: `attest:${m.id}:${m.capturedAt}` })),
+          producerSignatures: [...new Map(twinMindCase.submissions.map((m) => [m.id, m])).values()].map((m) => ({ mindId: m.name, signatureHash: `evidence:${m.evidenceHash || m.id}` })),
           disputedAssumptionResolved: data.disputedAssumption || '',
           missingEvidenceCatalog: data.missingEvidenceCatalog || [],
           status: data.status || 'EVIDENCE_DEFICIT',
