@@ -3,6 +3,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
 import { GoogleGenAI } from '@google/genai';
+import { deterministicAdmissionCheck, PUBLIC_MIND_IDS, type PublicMindId } from './src/engine/twinMindGovernance';
 
 dotenv.config();
 
@@ -19,8 +20,6 @@ const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY?.trim();
 const PATTY_MODEL = process.env.PATTY_MODEL || 'gpt-5.6';
 let ai: GoogleGenAI | null = null;
-
-type PublicMindId = 'chatgpt' | 'claude' | 'gemini' | 'grok' | 'perplexity';
 
 interface PublicMindSubmission {
   id: PublicMindId;
@@ -93,25 +92,6 @@ if (apiKey && apiKey !== 'MY_GEMINI_API_KEY' && apiKey.trim() !== '') {
 }
 
 
-function deterministicAdmissionCheck(mind: any, index: number) {
-  const reasoning = Array.isArray(mind?.reasoning) ? mind.reasoning.filter((x: any) => typeof x === 'string' && x.trim()) : [];
-  const hypothesis = typeof mind?.hypothesis === 'string' ? mind.hypothesis.trim() : '';
-  const kickedBackClaims: string[] = [];
-  if (hypothesis.length < 20) kickedBackClaims.push('Hypothesis is too thin to admit.');
-  if (reasoning.length < 2) kickedBackClaims.push('At least two explicit reasoning steps are required.');
-  const absolutePattern = /\b(guarantee[sd]?|proven|100%|impossible|zero risk|always|never fails)\b/i;
-  if (absolutePattern.test(hypothesis) && !reasoning.some((r: string) => /test|evidence|bound|measur|proof/i.test(r))) {
-    kickedBackClaims.push('Absolute claim lacks an explicit evidence/test/bound step.');
-  }
-  return {
-    passed: kickedBackClaims.length === 0,
-    checkerId: `CHECK-${String.fromCharCode(65 + index)}`,
-    kickedBackClaims,
-    diagnostic: kickedBackClaims.length ? kickedBackClaims.join(' ') : 'Deterministic admission checks passed for structure and unsupported absolute-claim pattern.',
-    verifiedAssumptions: [],
-  };
-}
-
 function normalizeMind(m: any, index: number) {
   return {
     id: m?.id || ['charlie','claude','gemini','athena','daedalus'][index],
@@ -157,7 +137,7 @@ app.post('/api/twin-mind/cases/:caseId/submissions', (req: Request, res: Respons
   const item = twinMindCases.get(req.params.caseId);
   if (!item) return res.status(404).json({ error: 'Case not found.' });
   const id = String(req.body?.id || '').toLowerCase() as PublicMindId;
-  const allowed: PublicMindId[] = ['chatgpt', 'claude', 'gemini', 'grok', 'perplexity'];
+  const allowed = PUBLIC_MIND_IDS;
   const response = typeof req.body?.response === 'string' ? req.body.response.trim() : '';
   if (!allowed.includes(id) || response.length < 20) {
     return res.status(400).json({ error: 'A recognized public mind and substantive response are required.' });
@@ -179,8 +159,8 @@ app.post('/api/twin-mind/cases/:caseId/submissions', (req: Request, res: Respons
   return res.json({
     case: item,
     admission: deterministicAdmissionCheck({
-      hypothesis: response.slice(0, 500),
-      reasoning: response.split(/\n+/).filter(Boolean).slice(0, 8),
+      hypothesis: response,
+      reasoning: [],
     }, allowed.indexOf(id)),
   });
 });
