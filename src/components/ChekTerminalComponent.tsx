@@ -22,6 +22,7 @@ import {
 import { ChekVerificationEngine } from '../engine/chekEngine';
 
 interface ChekTerminalComponentProps {
+  mode?: 'governor' | 'chek';
   chekEngine: ChekVerificationEngine;
   currentProposal: ConvergedProposal | null;
   onAdvanceToExecution: (vaultRecord: ChekVaultRecord) => void;
@@ -31,6 +32,7 @@ export const ChekTerminalComponent: React.FC<ChekTerminalComponentProps> = ({
   chekEngine,
   currentProposal,
   onAdvanceToExecution,
+  mode = 'governor',
 }) => {
   const [stages, setStages] = useState<ChekAuditStage[]>([]);
   const [invariants, setInvariants] = useState<InvariantEvaluation[]>([]);
@@ -42,6 +44,8 @@ export const ChekTerminalComponent: React.FC<ChekTerminalComponentProps> = ({
   >('NONE');
 
   const vaultHistory = chekEngine.getVaultHistory();
+
+  const isGovernor = mode === 'governor';
 
   const handleRunEvaluation = async (breachType?: 'PROTECTED_WRITE' | 'POWER_LIMIT' | 'SELF_APPROVAL') => {
     if (!currentProposal) return;
@@ -66,25 +70,25 @@ export const ChekTerminalComponent: React.FC<ChekTerminalComponentProps> = ({
         <div className="relative z-10 max-w-3xl space-y-2">
           <div className="flex items-center gap-2">
             <span className="px-2.5 py-0.5 rounded-full text-xs font-mono font-bold bg-emerald-900/80 text-emerald-300 border border-emerald-700">
-              STAGE 5: INDEPENDENT AUTHORITY
+              {isGovernor ? 'STAGE 5: GOVERNOR AUTHORITY' : 'STAGE 6: CHEK INDEPENDENT VERIFICATION'}
             </span>
-            <span className="text-xs font-mono text-slate-400">Strictly Outside Twin Mind's Authority Over Itself</span>
+            <span className="text-xs font-mono text-slate-400">{isGovernor ? 'Deterministic Policy Gate Before Consequential Execution' : 'Checks Patty, Governor, Evidence, and System Governance'}</span>
           </div>
 
           <h2 className="text-2xl font-black tracking-tight text-white">
-            "The Producer Cannot Approve Its Own Work."
+            {isGovernor ? '"Reasoning Does Not Grant Execution Authority."' : '"The Checker Is Also Checked."'}
           </h2>
 
           <p className="text-sm text-slate-300 leading-relaxed">
-            Twin Mind can be brilliant. Patty can achieve unanimous agreement. Every model in the room can swear on a
-            stack of GPUs that they are right. That still does not give them permission. CHEK independently evaluates
-            consequential state changes and actions against deterministic rules and the signed evidence chain.
+            {isGovernor
+              ? 'Governor applies deterministic policy to consequential state changes and actions. It is the authority gate: permitted actions receive an execution certificate; prohibited actions are vetoed.'
+              : 'CHEK is independent of the authority chain. It verifies that Patty used the admitted evidence correctly, Governor applied the right policy, provenance is intact, and the governed system stayed within its rules. CHEK reports valid, invalid, inconsistent, or unverifiable. It does not grant execution authority.'}
           </p>
 
           <div className="pt-2 flex flex-wrap items-center gap-3">
             <div className="flex items-center gap-1.5 text-xs font-mono text-emerald-400 bg-emerald-950/60 px-2.5 py-1 rounded border border-emerald-800/80">
               <Key className="w-3.5 h-3.5" />
-              <span>Session-Isolated CHEK HMAC Authority</span>
+              <span>{isGovernor ? 'Session-Isolated Governor HMAC Authority' : 'Independent Governance Verification'}</span>
             </div>
             <div className="flex items-center gap-1.5 text-xs font-mono text-cyan-400 bg-cyan-950/60 px-2.5 py-1 rounded border border-cyan-800/80">
               <Database className="w-3.5 h-3.5" />
@@ -98,7 +102,7 @@ export const ChekTerminalComponent: React.FC<ChekTerminalComponentProps> = ({
       <div className="bg-slate-900/80 border border-slate-800 rounded-xl p-5 space-y-4">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-slate-800 pb-3">
           <div>
-            <span className="text-xs font-mono text-slate-400">ACTIVE PROPOSAL FOR INDEPENDENT AUDIT:</span>
+            <span className="text-xs font-mono text-slate-400">{isGovernor ? 'ACTIVE CONSEQUENTIAL PROPOSAL FOR GOVERNOR:' : 'ACTIVE GOVERNANCE RECORD FOR CHEK:'}</span>
             <h3 className="text-base font-bold text-white font-mono mt-0.5">
               {currentProposal ? currentProposal.title : 'No proposal currently in intake queue'}
             </h3>
@@ -112,14 +116,14 @@ export const ChekTerminalComponent: React.FC<ChekTerminalComponentProps> = ({
                 className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-slate-950 text-xs font-mono font-bold shadow-md shadow-emerald-950 active:scale-95 transition-all flex items-center gap-1.5"
               >
                 <ShieldCheck className="w-4 h-4" />
-                <span>Evaluate & Recompute Invariants</span>
+                <span>{isGovernor ? 'Evaluate Governor Policy' : 'Verify Governance Record'}</span>
               </button>
             </div>
           )}
         </div>
 
-        {/* Boundary Stress-Test Challenge Buttons */}
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs font-mono bg-slate-950 p-3 rounded-lg border border-slate-800/80">
+        {/* Governor boundary stress tests */}
+        {isGovernor && <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs font-mono bg-slate-950 p-3 rounded-lg border border-slate-800/80">
           <span className="text-slate-400 font-semibold flex items-center gap-1.5">
             <AlertOctagon className="w-4 h-4 text-amber-400" />
             Adversarial Boundary Invariance Tests:
@@ -145,7 +149,7 @@ export const ChekTerminalComponent: React.FC<ChekTerminalComponentProps> = ({
               Test Power Ceiling Veto
             </button>
           </div>
-        </div>
+        </div>}
       </div>
 
       {/* Tabs */}
