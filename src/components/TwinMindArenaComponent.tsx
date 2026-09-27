@@ -29,6 +29,8 @@ interface TwinMindArenaComponentProps {
   twinMindCase: TwinMindCase | null;
   onCapturePublicMind: (id: PublicMindId, response: string) => Promise<any>;
   onTransmitToChek: (proposal: ConvergedProposal) => void;
+  onTalkToPatty: (message: string) => Promise<string>;
+  pattyConversation: { at: string; role: 'USER' | 'PATTY'; text: string }[];
 }
 
 export const TwinMindArenaComponent: React.FC<TwinMindArenaComponentProps> = ({
@@ -43,6 +45,8 @@ export const TwinMindArenaComponent: React.FC<TwinMindArenaComponentProps> = ({
   twinMindCase,
   onCapturePublicMind,
   onTransmitToChek,
+  onTalkToPatty,
+  pattyConversation,
 }) => {
   const [selectedMindId, setSelectedMindId] = useState<string>('charlie');
   const [customProblem, setCustomProblem] = useState<string>(currentScenario.problemStatement);
@@ -51,6 +55,8 @@ export const TwinMindArenaComponent: React.FC<TwinMindArenaComponentProps> = ({
   const [captureText, setCaptureText] = useState('');
   const [captureStatus, setCaptureStatus] = useState('');
   const [copyStatus, setCopyStatus] = useState('');
+  const [pattyInput, setPattyInput] = useState('');
+  const [pattyChatStatus, setPattyChatStatus] = useState('');
 
   const selectedMind = minds.find((m) => m.id === selectedMindId) || minds[0];
 
@@ -357,6 +363,57 @@ export const TwinMindArenaComponent: React.FC<TwinMindArenaComponentProps> = ({
             )}
           </div>
         </div>
+      </div>
+
+      {/* Human-facing Patty Console */}
+      <div className="rounded-xl border border-amber-200/20 bg-[#0b0a08] p-5 space-y-4 shadow-xl">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <h3 className="text-sm font-black tracking-wide text-stone-100">TALK TO SARGENT PATTY</h3>
+            <p className="text-xs text-stone-500 font-mono mt-1">
+              {twinMindCase ? `Active case: ${twinMindCase.id}` : 'Open a case first so Patty has a case record to discuss.'}
+            </p>
+          </div>
+          <span className="text-[10px] font-mono text-amber-200 border border-amber-200/20 rounded px-2 py-1">HUMAN CONSOLE</span>
+        </div>
+        <div className="max-h-72 overflow-y-auto rounded-lg border border-stone-800 bg-black/40 p-3 space-y-3">
+          {pattyConversation.length === 0 ? (
+            <p className="text-xs text-stone-500 font-mono">Ask Patty what case she is working on, what evidence is admitted, what is disputed, or what is missing.</p>
+          ) : pattyConversation.map((m, i) => (
+            <div key={i} className={`text-xs font-mono ${m.role === 'PATTY' ? 'text-stone-200' : 'text-amber-100'}`}>
+              <span className="font-bold">{m.role === 'PATTY' ? 'PATTY' : 'YOU'}:</span> {m.text}
+            </div>
+          ))}
+        </div>
+        <div className="flex flex-col sm:flex-row gap-2">
+          <textarea
+            value={pattyInput}
+            onChange={(e) => setPattyInput(e.target.value)}
+            rows={2}
+            placeholder="Patty, tell me what case you're working on and what evidence you currently have."
+            className="flex-1 bg-black/50 border border-stone-800 rounded-lg p-3 text-xs font-mono text-stone-200 focus:outline-none focus:border-amber-200/40"
+          />
+          <button
+            disabled={!twinMindCase || !pattyInput.trim() || isDeliberating}
+            onClick={async () => {
+              const message = pattyInput.trim();
+              if (!message) return;
+              setPattyChatStatus('Patty is reading the case...');
+              try {
+                await onTalkToPatty(message);
+                setPattyInput('');
+                setPattyChatStatus('');
+              } catch (e: any) {
+                setPattyChatStatus(e?.message || 'Patty could not answer.');
+              }
+            }}
+            className="px-5 py-2 rounded-lg bg-gradient-to-r from-[#9b7a3f] to-[#c8a96b] text-black text-xs font-mono font-bold disabled:opacity-40"
+          >
+            Ask Patty
+          </button>
+        </div>
+        {pattyChatStatus && <p className="text-[10px] font-mono text-stone-500">{pattyChatStatus}</p>}
+        <p className="text-[10px] font-mono text-stone-600">Conversation informs deliberation only. It does not grant execution authority. CHEK remains independent.</p>
       </div>
 
       {/* SARGENT PATTY: Central Convergence Arena */}
