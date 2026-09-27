@@ -36,3 +36,21 @@
 ::-webkit-scrollbar-thumb:hover {
   background: #334155;
 }
+
+
+:root {
+  color-scheme: dark;
+  background: #070706;
+}
+
+body {
+  margin: 0;
+  background:
+    radial-gradient(circle at 50% -20%, rgba(200, 169, 107, 0.08), transparent 34rem),
+    #070706;
+}
+
+::selection {
+  background: rgba(226, 201, 141, 0.85);
+  color: #090806;
+}
