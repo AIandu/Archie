@@ -24,7 +24,7 @@ interface TwinMindArenaComponentProps {
   convergedProposal: ConvergedProposal | null;
   isDeliberating: boolean;
   onRunDeliberation: (problemText?: string) => void;
-  onRunPattyConvergence: () => void;
+  onRunPattyConvergence: (caseId?: string) => void;
   onTransmitToChek: (proposal: ConvergedProposal) => void;
 }
 
@@ -42,6 +42,52 @@ export const TwinMindArenaComponent: React.FC<TwinMindArenaComponentProps> = ({
   const [selectedMindId, setSelectedMindId] = useState<string>('charlie');
   const [customProblem, setCustomProblem] = useState<string>(currentScenario.problemStatement);
   const [isEditingProblem, setIsEditingProblem] = useState<boolean>(false);
+  const [caseId, setCaseId] = useState<string | null>(null);
+  const [publicMindId, setPublicMindId] = useState<string>('chatgpt');
+  const [publicResponse, setPublicResponse] = useState<string>('');
+  const [capturedMinds, setCapturedMinds] = useState<Record<string, { passed: boolean; diagnostic: string }>>({});
+  const [captureBusy, setCaptureBusy] = useState<boolean>(false);
+
+  const publicMindNames: Record<string, string> = {
+    chatgpt: 'ChatGPT', claude: 'Claude', gemini: 'Gemini', grok: 'Grok', perplexity: 'Perplexity',
+  };
+
+  const ensureCase = async () => {
+    if (caseId) return caseId;
+    const res = await fetch('/api/twin-mind/cases', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ problem: customProblem }),
+    });
+    if (!res.ok) throw new Error('Unable to open persistent Patty case.');
+    const data = await res.json();
+    setCaseId(data.case.id);
+    return data.case.id as string;
+  };
+
+  const capturePublicMind = async () => {
+    if (publicResponse.trim().length < 20) return;
+    setCaptureBusy(true);
+    try {
+      const activeCaseId = await ensureCase();
+      const res = await fetch(`/api/twin-mind/cases/${activeCaseId}/submissions`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: publicMindId,
+          response: publicResponse,
+          sourceMode: 'PUBLIC_FRESH_SESSION',
+        }),
+      });
+      if (!res.ok) throw new Error('Public mind response was not admitted.');
+      const data = await res.json();
+      setCapturedMinds((prev) => ({
+        ...prev,
+        [publicMindId]: { passed: data.admission.passed, diagnostic: data.admission.diagnostic },
+      }));
+      setPublicResponse('');
+    } finally {
+      setCaptureBusy(false);
+    }
+  };
 
   const selectedMind = minds.find((m) => m.id === selectedMindId) || minds[0];
 
@@ -143,6 +189,68 @@ export const TwinMindArenaComponent: React.FC<TwinMindArenaComponentProps> = ({
             {customProblem}
           </p>
         )}
+      </div>
+
+      {/* Live Public Mind Intake */}
+      <div className="bg-slate-900/80 border border-cyan-800/60 rounded-xl p-5 space-y-4">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-2">
+          <div>
+            <h3 className="text-sm font-bold text-white">Live Public Mind Intake</h3>
+            <p className="text-xs text-slate-400 mt-1">
+              Open a fresh public AI session, ask the same case, then paste its answer here. Archie preserves the case. The guest mind does not need memory.
+            </p>
+          </div>
+          <span className="text-[10px] font-mono text-cyan-300 border border-cyan-800 rounded px-2 py-1">
+            {caseId ? `PATTY CASE: ${caseId}` : 'PATTY CASE: NOT OPENED'}
+          </span>
+        </div>
+
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+          {Object.entries(publicMindNames).map(([id, name]) => (
+            <button
+              key={id}
+              onClick={() => setPublicMindId(id)}
+              className={`p-2 rounded border text-xs font-mono text-left ${
+                publicMindId === id ? 'border-cyan-500 bg-cyan-950/40 text-cyan-200' : 'border-slate-800 bg-slate-950 text-slate-400'
+              }`}
+            >
+              <div className="font-bold">{name}</div>
+              <div className="text-[9px] mt-1">
+                {capturedMinds[id] ? (capturedMinds[id].passed ? 'ADMITTED' : 'KICKED BACK') : 'WAITING'}
+              </div>
+            </button>
+          ))}
+        </div>
+
+        <textarea
+          value={publicResponse}
+          onChange={(e) => setPublicResponse(e.target.value)}
+          rows={5}
+          placeholder={`Paste the fresh ${publicMindNames[publicMindId]} response here...`}
+          className="w-full bg-slate-950 border border-slate-700 rounded-lg p-3 text-xs font-mono text-slate-200 focus:outline-none focus:border-cyan-500"
+        />
+
+        <div className="flex flex-col md:flex-row gap-2 justify-between">
+          <div className="text-[10px] font-mono text-slate-500">
+            {capturedMinds[publicMindId]?.diagnostic || 'Deterministic admission checker runs after capture. Passing means admissible, not true.'}
+          </div>
+          <div className="flex gap-2 shrink-0">
+            <button
+              onClick={capturePublicMind}
+              disabled={captureBusy || publicResponse.trim().length < 20}
+              className="px-3 py-2 rounded bg-cyan-700 hover:bg-cyan-600 text-white text-xs font-mono font-bold disabled:opacity-40"
+            >
+              {captureBusy ? 'Checking...' : 'Capture + Check'}
+            </button>
+            <button
+              onClick={() => onRunPattyConvergence(caseId || undefined)}
+              disabled={isDeliberating || !caseId}
+              className="px-3 py-2 rounded bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-mono font-bold disabled:opacity-40"
+            >
+              Send Admitted Evidence to Patty
+            </button>
+          </div>
+        </div>
       </div>
 
       {/* Outer Edge Minds Strip */}
