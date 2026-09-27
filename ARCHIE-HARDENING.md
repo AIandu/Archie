@@ -7,18 +7,18 @@ This build is a software reference implementation of the four-part architecture:
 - Protected boundary now covers every synapse touching cores 0-15, including protected/adaptive cross-boundary edges.
 - STDP and adaptive reinforcement cannot modify protected or cross-boundary synapses.
 - Added protected-boundary invariant inspection.
-- Resetting the refusal gate no longer unlocks execution. Only a verified CHEK authorization can temporarily unlock the output bus; it re-locks after dispatch.
-- CHEK now uses canonicalized SHA-256 record/proposal hashing and HMAC-SHA-256 execution authorizations rather than decorative hashes/tokens.
+- Resetting the refusal gate no longer unlocks execution. Only a verified Governor authorization, independently validated by CHEK, can temporarily unlock the output bus; it re-locks after dispatch.
+- Governor uses canonicalized SHA-256 record/proposal hashing and HMAC-SHA-256 execution authorizations. CHEK independently verifies the governed chain and never issues execution authority.
 - Added authorization verification and full hash-chain tamper verification before execution.
-- CHEK rejects protected writes, self-authorization, evidence-deficit proposals, invalid/excess transition energy, and out-of-policy declared risk.
+- Governor rejects protected writes, self-authorization, evidence-deficit proposals, invalid/excess transition energy, and out-of-policy declared risk. CHEK independently checks Patty evidence lineage, convergence integrity, Governor proposal binding, policy reproducibility, certificate validity, and protected substrate integrity.
 - Removed the unsupported fake Lyapunov numerical recomputation. Risk is now represented honestly as a deterministic declared-policy bound unless a real numerical model is supplied.
 - Twin Mind model output no longer self-generates its checker result. The server applies deterministic admission checks after generation.
 - Gemini model name is configurable with `GEMINI_MODEL`; default is `gemini-2.5-flash`.
-- Fixed the autonomous-cycle stale-state bug so CHEK evaluates the proposal returned by the current Patty convergence, not a prior React state value.
-- Producer values are explicitly treated as attestations, not CHEK authority signatures.
+- Fixed the autonomous-cycle stale-state bug so Governor evaluates the proposal returned by the current Patty convergence, not a prior React state value.
+- Producer values are explicitly treated as attestations, not Governor or CHEK authority signatures.
 - Reworded Womb and hardware screens to distinguish the live software reference model from proposed FPGA/ASIC implementation.
 - Hardware RTL and package information are now labeled as draft/target material pending simulation, synthesis, timing closure, physical design, fabrication, and bench validation.
-- Added regression tests for protected plasticity, refusal-gate execution locking, CHEK authorization/rejection, and vault tamper detection.
+- Added regression tests for protected plasticity, refusal-gate execution locking, Governor authorization/rejection and CHEK verification, and vault tamper detection.
 
 ## Validation performed in this environment
 
@@ -56,3 +56,13 @@ The live public-mind path currently uses controlled response capture: ask the sa
 ### Persistence boundary
 
 Patty case history is currently process-persistent in the running Archie service. Durable cross-redeploy storage is the next infrastructure layer and should be backed by an external datastore or attached persistent disk before claiming durable archival persistence.
+
+
+## Governor / CHEK authority separation (September 27, 2026)
+
+- Governor is the deterministic authority gate and the only component that issues GOV1 execution certificates.
+- CHEK is a separate non-authorizing verifier. Its outcomes are VALID, INVALID, INCONSISTENT, or UNVERIFIABLE.
+- CHEK's four gates are Evidence Auditor → Rule Checker → Conformance Gateway → Vault.
+- CHEK verifies Patty evidence lineage and convergence state, independently reproduces Governor policy, checks exact proposal binding and Governor certificate validity, and checks protected substrate integrity.
+- Execution requires an existing Governor authorization plus a VALID CHEK verification. CHEK cannot create permission; it establishes whether the Governor permission and governed chain are trustworthy.
+- Governor and CHEK maintain separate tamper-evident ledgers in this software reference implementation.
