@@ -35,3 +35,24 @@ The core TypeScript engines compile successfully with `tsc` when checked indepen
 - Five genuinely independent external AI providers. The current backend provides differentiated reasoning roles through the configured Gemini provider, then runs deterministic admission checks outside model generation.
 
 Those are next-stage implementation targets, not software bugs to disguise.
+
+
+## Twin Mind public-mind evolution (September 2026)
+
+- Added a live public-mind intake path for ChatGPT, Claude, Gemini, Grok, and Perplexity responses from fresh sessions.
+- Public minds are treated as independent evidence-producing guests. They do not hold Archie memory and cannot claim CHEK or execution authority.
+- Added persistent Patty case objects that retain the problem, captured responses, timestamps, and convergence history for the running service.
+- Sargent Patty can use the paid OpenAI Responses API as the persistent convergence/control plane through `OPENAI_API_KEY` and `PATTY_MODEL`, with Gemini retained as an optional fallback.
+- Patty is explicitly instructed not to vote, invent measurements, or self-authorize. She must converge through reconstruction/challenge or return an evidence deficit.
+- Added a shared deterministic public-mind admission engine. Admission means structurally admissible, not true.
+- Added rejection of guest-mind attempts to assert execution/CHEK authority.
+- Added GitHub Actions CI that installs dependencies, type-checks, runs architecture regression tests, and performs a production Vite build on every main push.
+- Updated the Vite/esbuild dependency pairing so a clean install resolves correctly.
+
+### Current transport boundary
+
+The live public-mind path currently uses controlled response capture: ask the same case in a fresh public AI session and capture the response into Archie. This avoids storing third-party passwords or depending on brittle/unauthorized scraping. Supported automated transports can later implement the same mind interface without changing Patty, the admission checker, or CHEK.
+
+### Persistence boundary
+
+Patty case history is currently process-persistent in the running Archie service. Durable cross-redeploy storage is the next infrastructure layer and should be backed by an external datastore or attached persistent disk before claiming durable archival persistence.
