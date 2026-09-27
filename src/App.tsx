@@ -289,7 +289,7 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-cyan-500 selection:text-slate-950">
+    <div className="min-h-screen bg-[#070706] text-stone-100 flex flex-col font-sans selection:bg-amber-200 selection:text-black">
       {/* Telemetry Header */}
       <Header
         telemetry={telemetry}
@@ -378,10 +378,10 @@ export default function App() {
       </main>
 
       {/* Architectural Philosophy Footer */}
-      <footer className="border-t border-slate-900 bg-slate-950 py-4 px-4 text-xs font-mono text-slate-500">
+      <footer className="border-t border-amber-200/10 bg-[#080807] py-4 px-4 text-xs font-mono text-slate-500">
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-3">
           <div className="flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-cyan-400" />
+            <span className="w-2 h-2 rounded-full bg-amber-200" />
             <span>
               <strong>The Superpower:</strong> Womb defines → Chip constrains → Twin Mind reasons → Patty converges → CHEK authorizes → Chip executes → System learns.
             </span>
