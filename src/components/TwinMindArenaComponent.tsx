@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Copy, CheckCircle2, AlertCircle, ChevronDown, ChevronUp } from 'lucide-react';
+import { Copy, CheckCircle2, AlertCircle, ChevronDown, ChevronUp, ExternalLink } from 'lucide-react';
 import { ConvergedProposal, ScenarioPreset, TwinMindCase, PublicMindId } from '../types/architecture';
 import { buildPublicMindCasePrompt } from '../engine/twinMindGovernance';
 
@@ -20,10 +20,12 @@ interface Props {
   pattyConversation: { at: string; role: 'USER' | 'PATTY'; text: string }[];
 }
 
-const PUBLIC_MINDS: { id: PublicMindId; label: string }[] = [
-  { id: 'chatgpt', label: 'ChatGPT' }, { id: 'claude', label: 'Claude' },
-  { id: 'gemini', label: 'Gemini' }, { id: 'grok', label: 'Grok' },
-  { id: 'perplexity', label: 'Perplexity' },
+const PUBLIC_MINDS: { id: PublicMindId; label: string; url: string }[] = [
+  { id: 'chatgpt', label: 'ChatGPT', url: 'https://chatgpt.com/' },
+  { id: 'claude', label: 'Claude', url: 'https://claude.ai/new' },
+  { id: 'gemini', label: 'Gemini', url: 'https://gemini.google.com/app' },
+  { id: 'grok', label: 'Grok', url: 'https://grok.com/' },
+  { id: 'perplexity', label: 'Perplexity', url: 'https://www.perplexity.ai/' },
 ];
 
 export const TwinMindArenaComponent: React.FC<Props> = ({
@@ -53,8 +55,29 @@ export const TwinMindArenaComponent: React.FC<Props> = ({
   const copyPacket = async () => {
     if (!packet) return;
     await navigator.clipboard.writeText(packet);
-    setStatus('Case packet copied. Ask each fresh public mind the identical question.');
-    setTimeout(() => setStatus(''), 2500);
+    setStatus('Question packet copied.');
+    setTimeout(() => setStatus(''), 2000);
+  };
+
+  const openMind = async (mind: typeof PUBLIC_MINDS[number]) => {
+    if (!packet) return;
+    try { await navigator.clipboard.writeText(packet); } catch {}
+    setCaptureMind(mind.id);
+    window.open(mind.url, '_blank', 'noopener,noreferrer');
+    setStatus(`${mind.label} opened. The identical Archie packet is on your clipboard. Paste, submit, then bring the answer back here.`);
+  };
+
+  const openAllMinds = async () => {
+    if (!packet) return;
+    try { await navigator.clipboard.writeText(packet); } catch {}
+    let opened = 0;
+    for (const mind of PUBLIC_MINDS) {
+      const win = window.open(mind.url, '_blank', 'noopener,noreferrer');
+      if (win) opened++;
+    }
+    setStatus(opened === PUBLIC_MINDS.length
+      ? 'Five public minds opened. The identical Archie packet is on your clipboard.'
+      : `Opened ${opened}/5 tabs. Your browser blocked the rest; use the individual Open buttons below.`);
   };
 
   const capture = async () => {
@@ -92,16 +115,22 @@ export const TwinMindArenaComponent: React.FC<Props> = ({
       <div className="flex items-center justify-between gap-3">
         <div><p className="text-[11px] font-mono tracking-[.18em] text-amber-200/70">THE FIVE MINDS</p>
           <p className="text-sm text-stone-400 mt-1">{uniqueMinds}/5 independent responses admitted</p></div>
-        <button onClick={copyPacket} className="flex items-center gap-2 rounded-lg border border-amber-200/20 px-3 py-2 text-xs text-amber-100"><Copy size={14}/> Copy question packet</button>
+        <div className="flex flex-wrap gap-2">
+          <button onClick={copyPacket} className="flex items-center gap-2 rounded-lg border border-amber-200/20 px-3 py-2 text-xs text-amber-100"><Copy size={14}/> Copy packet</button>
+          <button onClick={openAllMinds} className="flex items-center gap-2 rounded-lg bg-gradient-to-r from-[#9b7a3f] to-[#c8a96b] px-3 py-2 text-xs font-bold text-black"><ExternalLink size={14}/> Open Five Minds</button>
+        </div>
       </div>
       <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
         {PUBLIC_MINDS.map(m => {
           const admitted=twinMindCase.submissions.some(x=>x.id===m.id);
-          return <button key={m.id} onClick={()=>setCaptureMind(m.id)}
-            className={`rounded-lg border p-3 text-left ${captureMind===m.id?'border-amber-200/40 bg-amber-950/15':'border-stone-800 bg-black/30'}`}>
-            <div className="text-xs font-bold text-stone-200">{m.label}</div>
-            <div className={`mt-1 text-[10px] font-mono ${admitted?'text-emerald-400':'text-stone-600'}`}>{admitted?'ADMITTED':'WAITING'}</div>
-          </button>
+          return <div key={m.id}
+            className={`rounded-lg border p-3 ${captureMind===m.id?'border-amber-200/40 bg-amber-950/15':'border-stone-800 bg-black/30'}`}>
+            <button onClick={()=>setCaptureMind(m.id)} className="w-full text-left">
+              <div className="text-xs font-bold text-stone-200">{m.label}</div>
+              <div className={`mt-1 text-[10px] font-mono ${admitted?'text-emerald-400':'text-stone-600'}`}>{admitted?'ADMITTED':'WAITING'}</div>
+            </button>
+            <button onClick={()=>openMind(m)} className="mt-3 flex items-center gap-1 text-[10px] font-bold text-amber-100/80"><ExternalLink size={11}/> OPEN</button>
+          </div>
         })}
       </div>
       <textarea value={captureText} onChange={e=>setCaptureText(e.target.value)} rows={5}
