@@ -75,7 +75,11 @@ async function loadTwinMindCases() {
   try {
     const raw = await readFile(CASE_STORE_PATH, 'utf8');
     const rows = JSON.parse(raw);
-    if (Array.isArray(rows)) for (const item of rows) if (item?.id) twinMindCases.set(item.id, item);
+    if (Array.isArray(rows)) for (const item of rows) if (item?.id) {
+      item.submissions = Array.isArray(item.submissions) ? item.submissions : [];
+      item.challenges = Array.isArray(item.challenges) ? item.challenges : [];
+      twinMindCases.set(item.id, item);
+    }
   } catch (err: any) {
     if (err?.code !== 'ENOENT') console.warn('Twin Mind case store load failed:', err?.message);
   }
@@ -279,6 +283,14 @@ IMPORTANT: Never write a public mind's reply yourself. Every dialogue.response M
 
   const sanitizePatty = (parsed: any) => {
     if (Array.isArray(parsed?.dialogue)) parsed.dialogue = parsed.dialogue.map((x: any) => ({ ...x, speaker: 'Sargent Patty', response: '' }));
+    const unresolved = Array.isArray(parsed?.dialogue) && parsed.dialogue.some((x: any) => typeof x?.instruction === 'string' && x.instruction.trim());
+    if (unresolved) {
+      parsed.status = 'EVIDENCE_DEFICIT';
+      parsed.missingEvidenceCatalog = Array.isArray(parsed.missingEvidenceCatalog) ? parsed.missingEvidenceCatalog : [];
+      if (!parsed.missingEvidenceCatalog.includes('A real external public-mind response to Patty\'s challenge is required.')) {
+        parsed.missingEvidenceCatalog.push('A real external public-mind response to Patty\'s challenge is required.');
+      }
+    }
     return parsed;
   };
 
@@ -330,6 +342,22 @@ IMPORTANT: Never write a public mind's reply yourself. Every dialogue.response M
       });
 
       const parsed = sanitizePatty(JSON.parse(response.text || '{}'));
+      if (persistentCase && Array.isArray(parsed.dialogue)) {
+        persistentCase.challenges ||= [];
+        for (const d of parsed.dialogue) {
+          const target = String(d?.target || '').toLowerCase() as PublicMindId;
+          if (PUBLIC_MIND_IDS.includes(target) && typeof d?.instruction === 'string' && d.instruction.trim()) {
+            persistentCase.challenges.push({
+              id: `CHAL-${randomUUID().toUpperCase()}`,
+              target,
+              instruction: d.instruction.trim(),
+              createdAt: new Date().toISOString(),
+              sourceEvidenceHashes: persistentCase.submissions.map((x) => x.evidenceHash),
+              status: 'AWAITING_RESPONSE',
+            });
+          }
+        }
+      }
       if (persistentCase) {
         const now = new Date().toISOString();
         persistentCase.updatedAt = now;
