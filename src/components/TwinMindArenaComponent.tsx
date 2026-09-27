@@ -425,7 +425,7 @@ export const TwinMindArenaComponent: React.FC<TwinMindArenaComponentProps> = ({
           </div>
 
           <button
-            onClick={onRunPattyConvergence}
+            onClick={() => onRunPattyConvergence(caseId || undefined)}
             disabled={isDeliberating}
             className="px-4 py-2 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-mono font-bold shadow-md shadow-amber-950 flex items-center gap-2 active:scale-95 transition-all disabled:opacity-50"
           >
