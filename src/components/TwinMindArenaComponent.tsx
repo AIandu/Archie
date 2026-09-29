@@ -152,7 +152,7 @@ export const TwinMindArenaComponent: React.FC<Props> = ({
           className="mt-3 w-full sm:w-auto rounded-lg bg-gradient-to-r from-[#9b7a3f] to-[#c8a96b] px-6 py-3 font-bold text-black disabled:opacity-40">
           Talk to Patty
         </button>
-      </>}
+      </>
     </section>}
 
     {twinMindCase && <section className="rounded-2xl border border-amber-200/20 bg-[#0b0a08] p-5 sm:p-7 space-y-4">
