@@ -99,6 +99,7 @@ export interface PattyChallenge {
 export interface TwinMindCase {
   id: string;
   problem: string;
+  activePrompt?: string;
   createdAt: string;
   updatedAt: string;
   submissions: PublicMindEvidence[];

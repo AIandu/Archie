@@ -50,6 +50,7 @@ interface PattyChallenge {
 interface TwinMindCase {
   id: string;
   problem: string;
+  activePrompt: string;
   createdAt: string;
   updatedAt: string;
   submissions: PublicMindSubmission[];
@@ -89,6 +90,7 @@ async function loadTwinMindCases() {
     const raw = await readFile(CASE_STORE_PATH, 'utf8');
     const rows = JSON.parse(raw);
     if (Array.isArray(rows)) for (const item of rows) if (item?.id) {
+      item.activePrompt = typeof item.activePrompt === 'string' && item.activePrompt.trim() ? item.activePrompt : item.problem;
       item.submissions = Array.isArray(item.submissions) ? item.submissions : [];
       item.challenges = Array.isArray(item.challenges) ? item.challenges : [];
       item.pattyConversation = Array.isArray(item.pattyConversation) ? item.pattyConversation : [];
@@ -115,6 +117,7 @@ function createCase(problem: string): TwinMindCase {
   const item: TwinMindCase = {
     id: `CASE-${randomUUID().toUpperCase()}`,
     problem,
+    activePrompt: problem,
     createdAt: now,
     updatedAt: now,
     submissions: [],
@@ -235,7 +238,7 @@ app.get('/api/twin-mind/bridge/:caseId', (req: Request, res: Response) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   const item = twinMindCases.get(req.params.caseId);
   if (!item || req.query.token !== item.bridgeToken) return res.status(404).json({ error: 'Bridge case not found.' });
-  return res.json({ caseId: item.id, problem: item.problem, packet: buildPublicMindCasePrompt(item.problem, item.id) });
+  return res.json({ caseId: item.id, problem: item.activePrompt || item.problem, packet: buildPublicMindCasePrompt(item.activePrompt || item.problem, item.id) });
 });
 
 app.post('/api/twin-mind/bridge/:caseId', async (req: Request, res: Response) => {
@@ -386,6 +389,13 @@ ${JSON.stringify({ id:item.id, problem:item.problem, admittedEvidence:evidence, 
   }
   if (!reply) return res.status(503).json({ error: 'Patty is offline.' });
   item.pattyConversation.push({ at: new Date().toISOString(), role: 'PATTY', text: reply });
+  // A new operator turn becomes the only live deliberation target. Prior Twin Mind
+  // evidence/convergence remains represented in conversation/history, but must not
+  // masquerade as evidence for the new question.
+  item.activePrompt = message;
+  item.submissions = [];
+  item.challenges = [];
+  item.lastConvergence = undefined;
   item.pattyState = { lastReasoningMode: reasoningMode, twinMindRecommended, reason: twinMindReason };
   item.updatedAt = new Date().toISOString();
   item.history.push({ at: item.updatedAt, event: 'PATTY_OPERATOR_EXCHANGE', detail: 'Patty answered the operator from the persistent case record.' });
@@ -400,13 +410,14 @@ app.post('/api/twin-mind/patty-converge', async (req: Request, res: Response) =>
     ? persistentCase.submissions.map((x) => ({ evidenceId: x.evidenceId, evidenceHash: x.evidenceHash, id: x.id, name: x.name, response: x.response, capturedAt: x.capturedAt, revision: x.revision, parentEvidenceHash: x.parentEvidenceHash, challengeId: x.challengeId }))
     : mindsData;
 
+  const activeProblem = persistentCase?.activePrompt || problem || persistentCase?.problem || '';
   const pattyPrompt = `You are Sargent Patty, the persistent convergence controller in Twin Mind.
 The outer minds are independent public AI systems. They are evidence-producing guests, not authorities and not persistent memory.
 You preserve the case, challenge disagreements, demand reconstruction of another mind's reasoning, and refuse majority voting.
 Every claim admitted to the center must survive deterministic admission checks outside the model.
 You have ZERO execution authority. CHEK independently decides whether any consequential proposal may execute.
 
-Problem: "${problem}"
+Problem: "${activeProblem}"
 Admitted public-mind evidence: ${JSON.stringify(publicEvidence)}
 
 Produce either a defensible convergence or a precise evidence deficit. Do not invent experiments, measurements, signatures, or facts that are absent from the evidence.

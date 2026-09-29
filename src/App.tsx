@@ -256,6 +256,9 @@ export default function App() {
 
   const handleTalkToPatty = async (message: string) => {
     if (!twinMindCase) throw new Error('Open a case first.');
+    // Never display a prior convergence as if it belongs to the new operator turn.
+    setConvergedProposal(null);
+    setPattyDialogue([]);
     const optimistic = [...pattyConversation, { at: new Date().toISOString(), role: 'USER' as const, text: message }];
     setPattyConversation(optimistic);
     const res = await fetch(`/api/twin-mind/cases/${twinMindCase.id}/patty-chat`, {
@@ -278,7 +281,7 @@ export default function App() {
     try {
       const res = await fetch('/api/twin-mind/patty-converge', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ problem: twinMindCase.problem, caseId: twinMindCase.id }),
+        body: JSON.stringify({ problem: twinMindCase.activePrompt || twinMindCase.problem, caseId: twinMindCase.id }),
       });
       if (!res.ok) throw new Error(await res.text());
       const data = await res.json();
