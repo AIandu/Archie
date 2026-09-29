@@ -155,6 +155,32 @@ export const TwinMindArenaComponent: React.FC<Props> = ({
       </>}
     </section>}
 
+    {twinMindCase && <section className="rounded-2xl border border-amber-200/20 bg-[#0b0a08] p-5 sm:p-7 space-y-4">
+      <div><p className="text-[11px] font-mono tracking-[.18em] text-amber-200/70">SARGENT PATTY</p>
+        <h3 className="text-xl font-bold text-stone-100 mt-1">Your persistent cognitive partner</h3>
+        <p className="mt-1 text-[11px] font-mono text-stone-600">CASE {twinMindCase.id}</p>
+        {twinMindCase?.pattyState && <div className="mt-2 flex flex-wrap items-center gap-2">
+          <span className="rounded-full border border-amber-200/20 px-2 py-1 text-[10px] font-mono text-amber-100">{twinMindCase.pattyState.lastReasoningMode}</span>
+          {twinMindCase.pattyState.twinMindRecommended && <span className="rounded-full border border-cyan-400/20 px-2 py-1 text-[10px] font-mono text-cyan-300">TWIN MIND RECOMMENDED</span>}
+        </div>}</div>
+      <div className="rounded-xl border border-stone-800 bg-black/40 p-4 max-h-80 overflow-y-auto space-y-3">
+        {pattyConversation.length===0?<p className="text-xs text-stone-500">Patty has the case. Ask what she knows, where the minds disagree, or what evidence is missing.</p>:
+        pattyConversation.map((m,i)=><p key={i} className="text-sm text-stone-300"><b className={m.role==='PATTY'?'text-amber-100':'text-stone-100'}>{m.role==='PATTY'?'PATTY':'YOU'}:</b> {m.text}</p>)}
+      </div>
+      <textarea value={pattyInput} onChange={e=>setPattyInput(e.target.value)} rows={3} placeholder="Talk to Patty..."
+        className="w-full rounded-xl border border-stone-800 bg-black/50 p-4 text-sm text-stone-200 focus:outline-none focus:border-amber-200/40"/>
+      <div className="flex flex-wrap gap-2">
+        <button disabled={!pattyInput.trim()} onClick={async()=>{const m=pattyInput.trim();setPattyInput('');await onTalkToPatty(m);}}
+          className="rounded-lg bg-gradient-to-r from-[#9b7a3f] to-[#c8a96b] px-5 py-2.5 text-xs font-bold text-black disabled:opacity-40">Ask Patty</button>
+        <button disabled={uniqueMinds<2 || isDeliberating} onClick={()=>onRunPattyConvergence(twinMindCase.id)}
+          className="rounded-lg border border-amber-200/25 px-5 py-2.5 text-xs font-bold text-amber-100 disabled:opacity-30">Resolve the Minds</button>
+        {uniqueMinds<2 && <button onClick={()=>{setShowTwinMind(true); openAllMinds();}}
+          className="rounded-lg border border-cyan-400/30 bg-cyan-950/20 px-5 py-2.5 text-xs font-bold text-cyan-200">Bring in Five Minds</button>}
+      </div>
+      {twinMindCase.pattyState?.twinMindRecommended && <p className="text-[11px] text-cyan-300/70">Patty's reason: {twinMindCase.pattyState.reason}</p>}
+      {uniqueMinds<2 && <p className="text-[11px] text-stone-600">Independent minds are optional. If invoked, their responses are checked and attached only to the current Patty turn. Convergence requires at least two admitted independent responses.</p>}
+    </section>}
+
     {twinMindVisible && <section className="rounded-2xl border border-stone-800 bg-[#0b0a08] p-5 sm:p-7 space-y-4">
       <div className="flex items-center justify-between gap-3">
         <div><p className="text-[11px] font-mono tracking-[.18em] text-amber-200/70">THE FIVE MINDS</p>
@@ -190,32 +216,6 @@ export const TwinMindArenaComponent: React.FC<Props> = ({
         {showEvidence?<ChevronUp size={14}/>:<ChevronDown size={14}/>} {showEvidence?'Hide':'View'} evidence details
       </button>
       {showEvidence && <div className="space-y-2">{twinMindCase.submissions.map(x=><div key={x.evidenceId} className="rounded-lg border border-stone-800 p-3 text-xs text-stone-400"><b className="text-stone-200">{x.name}</b><p className="mt-2 whitespace-pre-wrap">{x.response}</p></div>)}</div>}
-    </section>}
-
-    {twinMindCase && <section className="rounded-2xl border border-amber-200/20 bg-[#0b0a08] p-5 sm:p-7 space-y-4">
-      <div><p className="text-[11px] font-mono tracking-[.18em] text-amber-200/70">SARGENT PATTY</p>
-        <h3 className="text-xl font-bold text-stone-100 mt-1">Your persistent cognitive partner</h3>
-        <p className="mt-1 text-[11px] font-mono text-stone-600">CASE {twinMindCase.id}</p>
-        {twinMindCase?.pattyState && <div className="mt-2 flex flex-wrap items-center gap-2">
-          <span className="rounded-full border border-amber-200/20 px-2 py-1 text-[10px] font-mono text-amber-100">{twinMindCase.pattyState.lastReasoningMode}</span>
-          {twinMindCase.pattyState.twinMindRecommended && <span className="rounded-full border border-cyan-400/20 px-2 py-1 text-[10px] font-mono text-cyan-300">TWIN MIND RECOMMENDED</span>}
-        </div>}</div>
-      <div className="rounded-xl border border-stone-800 bg-black/40 p-4 max-h-80 overflow-y-auto space-y-3">
-        {pattyConversation.length===0?<p className="text-xs text-stone-500">Patty has the case. Ask what she knows, where the minds disagree, or what evidence is missing.</p>:
-        pattyConversation.map((m,i)=><p key={i} className="text-sm text-stone-300"><b className={m.role==='PATTY'?'text-amber-100':'text-stone-100'}>{m.role==='PATTY'?'PATTY':'YOU'}:</b> {m.text}</p>)}
-      </div>
-      <textarea value={pattyInput} onChange={e=>setPattyInput(e.target.value)} rows={3} placeholder="Talk to Patty..."
-        className="w-full rounded-xl border border-stone-800 bg-black/50 p-4 text-sm text-stone-200 focus:outline-none focus:border-amber-200/40"/>
-      <div className="flex flex-wrap gap-2">
-        <button disabled={!pattyInput.trim()} onClick={async()=>{const m=pattyInput.trim();setPattyInput('');await onTalkToPatty(m);}}
-          className="rounded-lg bg-gradient-to-r from-[#9b7a3f] to-[#c8a96b] px-5 py-2.5 text-xs font-bold text-black disabled:opacity-40">Ask Patty</button>
-        <button disabled={uniqueMinds<2 || isDeliberating} onClick={()=>onRunPattyConvergence(twinMindCase.id)}
-          className="rounded-lg border border-amber-200/25 px-5 py-2.5 text-xs font-bold text-amber-100 disabled:opacity-30">Resolve the Minds</button>
-        {uniqueMinds<2 && <button onClick={()=>{setShowTwinMind(true); openAllMinds();}}
-          className="rounded-lg border border-cyan-400/30 bg-cyan-950/20 px-5 py-2.5 text-xs font-bold text-cyan-200">Bring in Five Minds</button>}
-      </div>
-      {twinMindCase.pattyState?.twinMindRecommended && <p className="text-[11px] text-cyan-300/70">Patty's reason: {twinMindCase.pattyState.reason}</p>}
-      {uniqueMinds<2 && <p className="text-[11px] text-stone-600">Independent minds are optional. If invoked, their responses are checked and attached only to the current Patty turn. Convergence requires at least two admitted independent responses.</p>}
     </section>}
 
     {convergedProposal && <section className="rounded-2xl border border-stone-800 bg-[#0b0a08] p-5 sm:p-7">
