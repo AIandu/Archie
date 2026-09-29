@@ -45,10 +45,12 @@ export const TwinMindArenaComponent: React.FC<Props> = ({
   const [showEvidence, setShowEvidence] = useState(false);
   const [showMacroSetup, setShowMacroSetup] = useState(false);
   const [showCaseHistory, setShowCaseHistory] = useState(false);
+  const [showTwinMind, setShowTwinMind] = useState(false);
 
   const uniqueMinds = new Set((twinMindCase?.submissions || []).map(x => x.id)).size;
-  const activeQuestion = twinMindCase?.problem || '';
-  const packet = twinMindCase ? buildPublicMindCasePrompt(twinMindCase.problem, twinMindCase.id) : '';
+  const activeQuestion = twinMindCase?.activePrompt || twinMindCase?.problem || '';
+  const packet = twinMindCase ? buildPublicMindCasePrompt(activeQuestion, twinMindCase.id) : '';
+  const twinMindVisible = Boolean(twinMindCase && (showTwinMind || twinMindCase.pattyState?.twinMindRecommended || uniqueMinds > 0));
 
   const startCase = async () => {
     const q = question.trim();
@@ -138,11 +140,11 @@ export const TwinMindArenaComponent: React.FC<Props> = ({
       </div>}
     </section>
 
-    <section className="rounded-2xl border border-amber-200/15 bg-[#0b0a08] p-5 sm:p-7">
+    {!twinMindCase && <section className="rounded-2xl border border-amber-200/15 bg-[#0b0a08] p-5 sm:p-7">
       <p className="text-[11px] font-mono tracking-[.18em] text-amber-200/70">SARGENT PATTY • ARCHIE COGNITIVE FRONT DOOR</p>
       <h2 className="text-2xl font-bold text-stone-100 mt-2">What are we working on?</h2>
       <p className="text-sm text-stone-500 mt-2">Talk to Patty normally. She can reason, predict, generate and decide with you. Twin Mind stays behind the wall until independent minds would materially improve the answer.</p>
-      {!twinMindCase ? <>
+      <>
         <textarea value={question} onChange={e=>setQuestion(e.target.value)} rows={5}
           placeholder="Ask Patty a question, throw her an idea, or give her a problem..."
           className="mt-5 w-full rounded-xl border border-stone-800 bg-black/50 p-4 text-sm text-stone-100 focus:outline-none focus:border-amber-200/40" />
@@ -150,16 +152,10 @@ export const TwinMindArenaComponent: React.FC<Props> = ({
           className="mt-3 w-full sm:w-auto rounded-lg bg-gradient-to-r from-[#9b7a3f] to-[#c8a96b] px-6 py-3 font-bold text-black disabled:opacity-40">
           Talk to Patty
         </button>
-      </> : <>
-        <div className="mt-4 rounded-xl border border-stone-800 bg-black/40 p-4 text-sm text-stone-200">{activeQuestion}</div>
-        <div className="mt-3 flex flex-wrap gap-2">
-          <button onClick={()=>{ setQuestion(''); onRunDeliberation(''); }} className="hidden">New</button>
-          <span className="text-[11px] font-mono text-stone-500">CASE {twinMindCase.id}</span>
-        </div>
       </>}
-    </section>
+    </section>}
 
-    {twinMindCase && <section className="rounded-2xl border border-stone-800 bg-[#0b0a08] p-5 sm:p-7 space-y-4">
+    {twinMindVisible && <section className="rounded-2xl border border-stone-800 bg-[#0b0a08] p-5 sm:p-7 space-y-4">
       <div className="flex items-center justify-between gap-3">
         <div><p className="text-[11px] font-mono tracking-[.18em] text-amber-200/70">THE FIVE MINDS</p>
           <p className="text-sm text-stone-400 mt-1">{uniqueMinds}/5 independent responses admitted</p></div>
@@ -199,6 +195,7 @@ export const TwinMindArenaComponent: React.FC<Props> = ({
     {twinMindCase && <section className="rounded-2xl border border-amber-200/20 bg-[#0b0a08] p-5 sm:p-7 space-y-4">
       <div><p className="text-[11px] font-mono tracking-[.18em] text-amber-200/70">SARGENT PATTY</p>
         <h3 className="text-xl font-bold text-stone-100 mt-1">Your persistent cognitive partner</h3>
+        <p className="mt-1 text-[11px] font-mono text-stone-600">CASE {twinMindCase.id}</p>
         {twinMindCase?.pattyState && <div className="mt-2 flex flex-wrap items-center gap-2">
           <span className="rounded-full border border-amber-200/20 px-2 py-1 text-[10px] font-mono text-amber-100">{twinMindCase.pattyState.lastReasoningMode}</span>
           {twinMindCase.pattyState.twinMindRecommended && <span className="rounded-full border border-cyan-400/20 px-2 py-1 text-[10px] font-mono text-cyan-300">TWIN MIND RECOMMENDED</span>}
@@ -214,11 +211,11 @@ export const TwinMindArenaComponent: React.FC<Props> = ({
           className="rounded-lg bg-gradient-to-r from-[#9b7a3f] to-[#c8a96b] px-5 py-2.5 text-xs font-bold text-black disabled:opacity-40">Ask Patty</button>
         <button disabled={uniqueMinds<2 || isDeliberating} onClick={()=>onRunPattyConvergence(twinMindCase.id)}
           className="rounded-lg border border-amber-200/25 px-5 py-2.5 text-xs font-bold text-amber-100 disabled:opacity-30">Resolve the Minds</button>
-        {twinMindCase.pattyState?.twinMindRecommended && uniqueMinds<2 && <button onClick={openAllMinds}
-          className="rounded-lg border border-cyan-400/30 bg-cyan-950/20 px-5 py-2.5 text-xs font-bold text-cyan-200">Bring in Twin Mind</button>}
+        {uniqueMinds<2 && <button onClick={()=>{setShowTwinMind(true); openAllMinds();}}
+          className="rounded-lg border border-cyan-400/30 bg-cyan-950/20 px-5 py-2.5 text-xs font-bold text-cyan-200">Bring in Five Minds</button>}
       </div>
       {twinMindCase.pattyState?.twinMindRecommended && <p className="text-[11px] text-cyan-300/70">Patty's reason: {twinMindCase.pattyState.reason}</p>}
-      {uniqueMinds<2 && <p className="text-[11px] text-stone-600">Twin Mind is optional until Patty recommends it or you choose to invoke it. Convergence requires admitted evidence from at least two independent minds.</p>}
+      {uniqueMinds<2 && <p className="text-[11px] text-stone-600">Independent minds are optional. If invoked, their responses are checked and attached only to the current Patty turn. Convergence requires at least two admitted independent responses.</p>}
     </section>}
 
     {convergedProposal && <section className="rounded-2xl border border-stone-800 bg-[#0b0a08] p-5 sm:p-7">
