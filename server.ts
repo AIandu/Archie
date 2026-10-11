@@ -1,6 +1,6 @@
 import express, { Request, Response } from 'express';
 import path from 'path';
-import { createHash, randomUUID } from 'crypto';
+import { createHash, createHmac, randomUUID, timingSafeEqual } from 'crypto';
 import { mkdir, readFile, writeFile, rename } from 'fs/promises';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
@@ -16,6 +16,44 @@ const app = express();
 const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
 
 app.use(express.json({ limit: '10mb' }));
+
+const OWNER_PASSWORD = process.env.ARCHIE_OWNER_PASSWORD?.trim();
+function ownerCookie(req: Request): boolean {
+  if (!OWNER_PASSWORD) return false;
+  const value = (req.headers.cookie || '').split(';').map(x => x.trim()).find(x => x.startsWith('archie_owner='))?.slice(13);
+  if (!value) return false;
+  const [expires, signature] = value.split('.');
+  if (!/^\\d+$/.test(expires || '') || !/^[a-f0-9]{64}$/.test(signature || '') || Number(expires) < Date.now()) return false;
+  const expected = createHmac('sha256', OWNER_PASSWORD).update(expires).digest('hex');
+  return timingSafeEqual(Buffer.from(signature), Buffer.from(expected));
+}
+app.get('/owner/unlock', (req: Request, res: Response) => {
+  if (!OWNER_PASSWORD) return res.status(503).send('Set ARCHIE_OWNER_PASSWORD in Cloud Run first.');
+  const auth = req.headers.authorization || '';
+  const [scheme, credentials] = auth.split(' ');
+  let supplied = '';
+  if (scheme === 'Basic' && credentials) {
+    try { supplied = Buffer.from(credentials, 'base64').toString('utf8').split(':').slice(1).join(':'); } catch {}
+  }
+  const left = Buffer.from(createHash('sha256').update(supplied).digest('hex'));
+  const right = Buffer.from(createHash('sha256').update(OWNER_PASSWORD).digest('hex'));
+  if (!supplied || !timingSafeEqual(left, right)) {
+    res.setHeader('WWW-Authenticate', 'Basic realm="Archie Owner"');
+    return res.status(401).send('Enter your owner password to unlock Archie.');
+  }
+  const expires = String(Date.now() + 12 * 60 * 60 * 1000);
+  const signature = createHmac('sha256', OWNER_PASSWORD).update(expires).digest('hex');
+  res.setHeader('Set-Cookie', 'archie_owner=' + expires + '.' + signature + '; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=43200');
+  res.setHeader('Cache-Control', 'no-store');
+  res.redirect('/');
+});
+// Never allow unauthenticated API access to conversations, private repository details, or execution routes.
+app.use('/api', (req: Request, res: Response, next) => {
+  if (!OWNER_PASSWORD) return res.status(503).json({ error: 'Set ARCHIE_OWNER_PASSWORD to enable Archie.' });
+  if (!ownerCookie(req)) return res.status(401).json({ error: 'Owner locked. Visit /owner/unlock to sign in.' });
+  next();
+});
+
 
 const apiKey = process.env.GEMINI_API_KEY;
 const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
@@ -370,7 +408,7 @@ async function portfolioInventory(authenticated = true) {
 }
 // This endpoint is intentionally PUBLIC-ONLY. Never return private repository metadata to anonymous visitors.
 app.get('/api/github/portfolios', async (_req: Request, res: Response) => {
-  try { res.setHeader('Cache-Control', 'no-store'); res.json({ portfolios: await portfolioInventory(false), privateRepositoriesIncluded: false }); }
+  try { res.setHeader('Cache-Control', 'no-store'); res.json({ portfolios: await portfolioInventory(true), privateRepositoriesIncluded: true }); }
   catch { res.status(502).json({ error: 'GitHub inventory unavailable' }); }
 });
 // Public file browsing remains public-only; never attach private credentials here.
@@ -382,13 +420,13 @@ app.get('/api/github/file/:owner/:repo', async (req: Request, res: Response) => 
       /(^|\/)(\.env|\.git|secrets?)(\/|$)/i.test(filePath)) return res.status(400).json({ error: 'Invalid repository or path' });
   try {
     const response = await fetch('https://api.github.com/repos/' + encodeURIComponent(owner) + '/' + encodeURIComponent(repo) + '/contents/' + filePath.split('/').map(encodeURIComponent).join('/'), {
-      headers: { 'Accept': 'application/vnd.github.raw+json', 'User-Agent': 'Archie-Portfolio-Reader' }, signal: AbortSignal.timeout(12000)
+      headers: { 'Accept': 'application/vnd.github.raw+json', 'User-Agent': 'Archie-Portfolio-Reader', ...(portfolioToken(owner) ? { Authorization: 'Bearer ' + portfolioToken(owner) } : {}) }, signal: AbortSignal.timeout(12000)
     });
-    if (!response.ok) return res.status(response.status === 404 ? 404 : 502).json({ error: 'Public file unavailable' });
+    if (!response.ok) return res.status(response.status === 404 ? 404 : 502).json({ error: 'File unavailable' });
     const raw = await response.text();
     if (raw.length > 120000) return res.status(413).json({ error: 'File too large' });
     res.setHeader('Cache-Control', 'no-store');
-    res.json({ owner, repository: repo, path: filePath, content: raw, access: 'public-only' });
+    res.json({ owner, repository: repo, path: filePath, content: raw, access: portfolioToken(owner) ? 'token-authenticated' : 'public-only' });
   } catch { res.status(502).json({ error: 'GitHub file request failed' }); }
 });
 
@@ -405,7 +443,7 @@ app.post('/api/twin-mind/cases/:caseId/patty-chat', async (req: Request, res: Re
     .sort((a,b) => b.updatedAt.localeCompare(a.updatedAt))
     .slice(0, 12)
     .map((x) => ({ caseId:x.id, problem:x.problem, updatedAt:x.updatedAt, status:x.lastConvergence?.status || 'OPEN', decision:x.lastConvergence?.convergedProposal?.coreDecision || null }));
-  const githubContext = /github|repositor|portfolio|projects|aiandu|dessiidoo/i.test(message) ? await portfolioInventory(false) : null;
+  const githubContext = /github|repositor|portfolio|projects|aiandu|dessiidoo/i.test(message) ? await portfolioInventory(true) : null;
   const prompt = `You are Sargent Patty, the human-facing cognitive partner inside Archie. You think WITH the operator, never over them.
 
 TRUTH PROTOCOL:
@@ -423,7 +461,7 @@ Return JSON only:
 {"reply":"natural direct answer to the operator","reasoningMode":"COGNITIVE|PREDICTIVE|GENERATIVE|DECISIVE","twinMind":{"recommended":true|false,"reason":"short reason; empty when false"}}
 
 ACTIVE CASE + VERIFIED CONTINUITY INDEX:
-${JSON.stringify({ id:item.id, problem:item.problem, admittedEvidence:evidence, challenges:item.challenges, lastConvergence:item.lastConvergence || null, recentConversation:item.pattyConversation.slice(-16), continuityIndex:continuity, operatorMessage:message, githubPortfolioInventory:githubContext, githubInventoryScope:githubContext ? 'PUBLIC repositories only, live GitHub API results; private repositories not connected' : 'not requested' })}`;
+${JSON.stringify({ id:item.id, problem:item.problem, admittedEvidence:evidence, challenges:item.challenges, lastConvergence:item.lastConvergence || null, recentConversation:item.pattyConversation.slice(-16), continuityIndex:continuity, operatorMessage:message, githubPortfolioInventory:githubContext, githubInventoryScope:githubContext ? 'Authenticated GitHub inventory; private repositories included only when token permits' : 'not requested' })}`;
   let reply = '';
   let reasoningMode: 'COGNITIVE' | 'PREDICTIVE' | 'GENERATIVE' | 'DECISIVE' = 'COGNITIVE';
   let twinMindRecommended = false;
