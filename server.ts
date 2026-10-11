@@ -332,29 +332,48 @@ app.post('/api/twin-mind/cases/:caseId/submissions', async (req: Request, res: R
 
 /** Read-only GitHub portfolio discovery. Public repositories only; no credential leakage. */
 const PORTFOLIO_OWNERS = ['AIandu', 'Dessiidoo'] as const;
-async function githubPublicJson(url: string): Promise<any> {
-  const response = await fetch(url, { headers: { 'Accept': 'application/vnd.github+json', 'User-Agent': 'Archie-Portfolio-Reader' }, signal: AbortSignal.timeout(12000) });
-  if (!response.ok) throw new Error('GitHub returned HTTP ' + response.status);
+function portfolioToken(owner: string): string | undefined {
+  return owner.toLowerCase() === 'aiandu' ? process.env.GITHUB_TOKEN_1 : owner.toLowerCase() === 'dessiidoo' ? process.env.GITHUB_TOKEN_2 : undefined;
+}
+async function githubJson(url: string, token?: string): Promise<any> {
+  const response = await fetch(url, {
+    headers: { 'Accept': 'application/vnd.github+json', 'User-Agent': 'Archie-Portfolio-Reader',
+      ...(token ? { Authorization: 'Bearer ' + token } : {}) },
+    signal: AbortSignal.timeout(15000)
+  });
+  if (!response.ok) throw new Error('GitHub HTTP ' + response.status);
   return response.json();
 }
-async function portfolioInventory() {
+async function portfolioInventory(authenticated = true) {
   return Promise.all(PORTFOLIO_OWNERS.map(async owner => {
+    const token = authenticated ? portfolioToken(owner) : undefined;
     try {
       const repos: any[] = [];
-      for (let page = 1; page <= 5; page++) {
-        const batch = await githubPublicJson('https://api.github.com/users/' + owner + '/repos?per_page=100&page=' + page + '&type=owner&sort=updated');
+      for (let page = 1; page <= 10; page++) {
+        // Authenticated listing includes accessible private repositories for each token.
+        const url = token
+          ? 'https://api.github.com/user/repos?per_page=100&page=' + page + '&affiliation=owner&sort=updated'
+          : 'https://api.github.com/users/' + owner + '/repos?per_page=100&page=' + page + '&type=owner&sort=updated';
+        const batch = await githubJson(url, token);
         if (!Array.isArray(batch)) throw new Error('Invalid repository response');
-        repos.push(...batch.map((r: any) => ({ name: r.name, description: r.description, url: r.html_url, updatedAt: r.updated_at, defaultBranch: r.default_branch, archived: r.archived })));
+        repos.push(...batch.filter((r: any) => r.owner?.login?.toLowerCase() === owner.toLowerCase()).map((r: any) => ({
+          name: r.name, description: r.description, url: r.html_url, updatedAt: r.updated_at,
+          defaultBranch: r.default_branch, archived: r.archived, private: r.private
+        })));
         if (batch.length < 100) break;
       }
-      return { owner, access: 'public-only', repositories: repos, count: repos.length };
-    } catch (e: any) { return { owner, access: 'unavailable', error: String(e.message || e), repositories: [], count: 0 }; }
+      return { owner, access: token ? 'token-authenticated' : 'public-only', repositories: repos, count: repos.length };
+    } catch (e: any) {
+      return { owner, access: 'unavailable', error: String(e.message || e), repositories: [], count: 0 };
+    }
   }));
 }
+// This endpoint is intentionally PUBLIC-ONLY. Never return private repository metadata to anonymous visitors.
 app.get('/api/github/portfolios', async (_req: Request, res: Response) => {
-  try { res.setHeader('Cache-Control', 'no-store'); res.json({ portfolios: await portfolioInventory(), privateRepositoriesIncluded: false }); }
+  try { res.setHeader('Cache-Control', 'no-store'); res.json({ portfolios: await portfolioInventory(false), privateRepositoriesIncluded: false }); }
   catch { res.status(502).json({ error: 'GitHub inventory unavailable' }); }
 });
+// Public file browsing remains public-only; never attach private credentials here.
 app.get('/api/github/file/:owner/:repo', async (req: Request, res: Response) => {
   const { owner, repo } = req.params;
   const filePath = typeof req.query.path === 'string' ? req.query.path : 'README.md';
@@ -386,7 +405,7 @@ app.post('/api/twin-mind/cases/:caseId/patty-chat', async (req: Request, res: Re
     .sort((a,b) => b.updatedAt.localeCompare(a.updatedAt))
     .slice(0, 12)
     .map((x) => ({ caseId:x.id, problem:x.problem, updatedAt:x.updatedAt, status:x.lastConvergence?.status || 'OPEN', decision:x.lastConvergence?.convergedProposal?.coreDecision || null }));
-  const githubContext = /github|repositor|portfolio|projects|aiandu|dessiidoo/i.test(message) ? await portfolioInventory() : null;
+  const githubContext = /github|repositor|portfolio|projects|aiandu|dessiidoo/i.test(message) ? await portfolioInventory(false) : null;
   const prompt = `You are Sargent Patty, the human-facing cognitive partner inside Archie. You think WITH the operator, never over them.
 
 TRUTH PROTOCOL:
