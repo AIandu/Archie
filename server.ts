@@ -23,7 +23,7 @@ function ownerCookie(req: Request): boolean {
   const value = (req.headers.cookie || '').split(';').map(x => x.trim()).find(x => x.startsWith('archie_owner='))?.slice(13);
   if (!value) return false;
   const [expires, signature] = value.split('.');
-  if (!/^\\d+$/.test(expires || '') || !/^[a-f0-9]{64}$/.test(signature || '') || Number(expires) < Date.now()) return false;
+  if (!/^\d+$/.test(expires || '') || !/^[a-f0-9]{64}$/.test(signature || '') || Number(expires) < Date.now()) return false;
   const expected = createHmac('sha256', OWNER_PASSWORD).update(expires).digest('hex');
   return timingSafeEqual(Buffer.from(signature), Buffer.from(expected));
 }
