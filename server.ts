@@ -329,6 +329,50 @@ app.post('/api/twin-mind/cases/:caseId/submissions', async (req: Request, res: R
   return res.json({ case: item, admission });
 });
 
+
+/** Read-only GitHub portfolio discovery. Public repositories only; no credential leakage. */
+const PORTFOLIO_OWNERS = ['AIandu', 'Dessiidoo'] as const;
+async function githubPublicJson(url: string): Promise<any> {
+  const response = await fetch(url, { headers: { 'Accept': 'application/vnd.github+json', 'User-Agent': 'Archie-Portfolio-Reader' }, signal: AbortSignal.timeout(12000) });
+  if (!response.ok) throw new Error('GitHub returned HTTP ' + response.status);
+  return response.json();
+}
+async function portfolioInventory() {
+  return Promise.all(PORTFOLIO_OWNERS.map(async owner => {
+    try {
+      const repos: any[] = [];
+      for (let page = 1; page <= 5; page++) {
+        const batch = await githubPublicJson('https://api.github.com/users/' + owner + '/repos?per_page=100&page=' + page + '&type=owner&sort=updated');
+        if (!Array.isArray(batch)) throw new Error('Invalid repository response');
+        repos.push(...batch.map((r: any) => ({ name: r.name, description: r.description, url: r.html_url, updatedAt: r.updated_at, defaultBranch: r.default_branch, archived: r.archived })));
+        if (batch.length < 100) break;
+      }
+      return { owner, access: 'public-only', repositories: repos, count: repos.length };
+    } catch (e: any) { return { owner, access: 'unavailable', error: String(e.message || e), repositories: [], count: 0 }; }
+  }));
+}
+app.get('/api/github/portfolios', async (_req: Request, res: Response) => {
+  try { res.setHeader('Cache-Control', 'no-store'); res.json({ portfolios: await portfolioInventory(), privateRepositoriesIncluded: false }); }
+  catch { res.status(502).json({ error: 'GitHub inventory unavailable' }); }
+});
+app.get('/api/github/file/:owner/:repo', async (req: Request, res: Response) => {
+  const { owner, repo } = req.params;
+  const filePath = typeof req.query.path === 'string' ? req.query.path : 'README.md';
+  if (!PORTFOLIO_OWNERS.some(x => x.toLowerCase() === owner.toLowerCase()) || !/^[a-zA-Z0-9_.-]{1,100}$/.test(repo) ||
+      !/^[a-zA-Z0-9_./-]{1,240}$/.test(filePath) || filePath.split('/').includes('..') ||
+      /(^|\/)(\.env|\.git|secrets?)(\/|$)/i.test(filePath)) return res.status(400).json({ error: 'Invalid repository or path' });
+  try {
+    const response = await fetch('https://api.github.com/repos/' + encodeURIComponent(owner) + '/' + encodeURIComponent(repo) + '/contents/' + filePath.split('/').map(encodeURIComponent).join('/'), {
+      headers: { 'Accept': 'application/vnd.github.raw+json', 'User-Agent': 'Archie-Portfolio-Reader' }, signal: AbortSignal.timeout(12000)
+    });
+    if (!response.ok) return res.status(response.status === 404 ? 404 : 502).json({ error: 'Public file unavailable' });
+    const raw = await response.text();
+    if (raw.length > 120000) return res.status(413).json({ error: 'File too large' });
+    res.setHeader('Cache-Control', 'no-store');
+    res.json({ owner, repository: repo, path: filePath, content: raw, access: 'public-only' });
+  } catch { res.status(502).json({ error: 'GitHub file request failed' }); }
+});
+
 app.post('/api/twin-mind/cases/:caseId/patty-chat', async (req: Request, res: Response) => {
   const item = twinMindCases.get(req.params.caseId);
   if (!item) return res.status(404).json({ error: 'Case not found.' });
@@ -342,6 +386,7 @@ app.post('/api/twin-mind/cases/:caseId/patty-chat', async (req: Request, res: Re
     .sort((a,b) => b.updatedAt.localeCompare(a.updatedAt))
     .slice(0, 12)
     .map((x) => ({ caseId:x.id, problem:x.problem, updatedAt:x.updatedAt, status:x.lastConvergence?.status || 'OPEN', decision:x.lastConvergence?.convergedProposal?.coreDecision || null }));
+  const githubContext = /github|repositor|portfolio|projects|aiandu|dessiidoo/i.test(message) ? await portfolioInventory() : null;
   const prompt = `You are Sargent Patty, the human-facing cognitive partner inside Archie. You think WITH the operator, never over them.
 
 TRUTH PROTOCOL:
@@ -359,7 +404,7 @@ Return JSON only:
 {"reply":"natural direct answer to the operator","reasoningMode":"COGNITIVE|PREDICTIVE|GENERATIVE|DECISIVE","twinMind":{"recommended":true|false,"reason":"short reason; empty when false"}}
 
 ACTIVE CASE + VERIFIED CONTINUITY INDEX:
-${JSON.stringify({ id:item.id, problem:item.problem, admittedEvidence:evidence, challenges:item.challenges, lastConvergence:item.lastConvergence || null, recentConversation:item.pattyConversation.slice(-16), continuityIndex:continuity, operatorMessage:message })}`;
+${JSON.stringify({ id:item.id, problem:item.problem, admittedEvidence:evidence, challenges:item.challenges, lastConvergence:item.lastConvergence || null, recentConversation:item.pattyConversation.slice(-16), continuityIndex:continuity, operatorMessage:message, githubPortfolioInventory:githubContext, githubInventoryScope:githubContext ? 'PUBLIC repositories only, live GitHub API results; private repositories not connected' : 'not requested' })}`;
   let reply = '';
   let reasoningMode: 'COGNITIVE' | 'PREDICTIVE' | 'GENERATIVE' | 'DECISIVE' = 'COGNITIVE';
   let twinMindRecommended = false;
