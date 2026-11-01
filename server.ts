@@ -49,6 +49,11 @@ app.get('/owner/unlock', (req: Request, res: Response) => {
 });
 // Never allow unauthenticated API access to conversations, private repository details, or execution routes.
 app.use('/api', (req: Request, res: Response, next) => {
+  // The Five Minds browser bridge runs in third-party tabs without Archie's
+  // SameSite=Strict owner cookie. Its case-specific bearer token is checked
+  // by the GET/POST handlers; keep every other /api route owner-only.
+  const isTokenBridge = /^\/twin-mind\/bridge\/CASE-[0-9a-f-]{36}$/i.test(req.path);
+  if (isTokenBridge && ['GET', 'POST', 'OPTIONS'].includes(req.method)) return next();
   if (!OWNER_PASSWORD) return res.status(503).json({ error: 'Set ARCHIE_OWNER_PASSWORD to enable Archie.' });
   if (!ownerCookie(req)) return res.status(401).json({ error: 'Owner locked. Visit /owner/unlock to sign in.' });
   next();
